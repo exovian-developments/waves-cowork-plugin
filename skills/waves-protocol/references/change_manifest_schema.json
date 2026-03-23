@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Change Manifest Schema",
+  "description": "Schema for documenting code changes made by the implementer subagent. This artifact is passed to the auditor for compliance verification. Designed for inter-agent communication within the implement command.",
+  "type": "object",
+  "properties": {
+    "objective_id": {
+      "type": "string",
+      "description": "ID of the objective being implemented (e.g., '1.1' for secondary objective 1 of main objective 1).",
+      "$comment": "Must match the objective ID from the logbook. Format: 'N' for main or 'N.M' for secondary."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when implementation was completed (ISO 8601).",
+      "$comment": "Set when implementer finishes. Used for tracking and logging."
+    },
+    "files_created": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of file paths that were created. Relative to project root.",
+      "$comment": "Include full relative path. Example: 'src/dtos/ProductDetailDTO.ts'"
+    },
+    "files_modified": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of file paths that were modified. Relative to project root.",
+      "$comment": "Include full relative path. Only list files with actual changes."
+    },
+    "files_deleted": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of file paths that were deleted. Relative to project root.",
+      "$comment": "Rarely used. Include if objective required removing obsolete code."
+    },
+    "patterns_applied": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "description": "List of patterns that were applied during implementation.",
+      "$comment": "Examples: 'BaseDTO inheritance', 'Repository pattern', 'Decorator pattern'. Helps auditor understand intent."
+    },
+    "rules_followed": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "description": "IDs of project rules that were explicitly followed during implementation.",
+      "$comment": "Reference rule IDs from project_rules.json. Auditor will verify these were correctly applied."
+    },
+    "code_sections": {
+      "type": "array",
+      "description": "Key code sections for auditor review. Include created/modified sections.",
+      "$comment": "Don't include entire files if large. Focus on sections relevant to rules and patterns.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "File path relative to project root."
+          },
+          "start_line": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Starting line number of the section."
+          },
+          "end_line": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Ending line number of the section."
+          },
+          "content": {
+            "type": "string",
+            "description": "The actual code content of this section.",
+            "$comment": "Include enough context for auditor to verify rules. For new files, can include entire content if small (<100 lines)."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Brief description of what this section does.",
+            "$comment": "Helps auditor understand intent. Example: 'DTO class with @Expose decorators'"
+          }
+        },
+        "required": ["file", "content"]
+      }
+    },
+    "implementation_notes": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Free-form notes about the implementation. Include decisions, trade-offs, or anything the auditor should know.",
+      "$comment": "Write clearly. Mention any deviations from completion_guide and why."
+    },
+    "dependencies_added": {
+      "type": "array",
+      "description": "New dependencies or imports added during implementation.",
+      "$comment": "Helps track what new packages or modules were introduced.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the dependency or import."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["npm_package", "local_import", "system_import"],
+            "description": "Type of dependency."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Why this dependency was needed."
+          }
+        },
+        "required": ["name", "type"]
+      }
+    },
+    "tests_written": {
+      "type": "array",
+      "description": "Tests written as part of this implementation.",
+      "$comment": "Optional but encouraged. Include if objective mentioned tests.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Test file path."
+          },
+          "test_names": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Names of test cases added."
+          }
+        },
+        "required": ["file", "test_names"]
+      }
+    }
+  },
+  "required": [
+    "objective_id",
+    "timestamp",
+    "files_created",
+    "files_modified",
+    "patterns_applied",
+    "rules_followed",
+    "code_sections",
+    "implementation_notes"
+  ],
+  "$defs": {
+    "audit_finding": {
+      "type": "object",
+      "description": "A compliance finding from the auditor. Used in audit response, not in change_manifest itself.",
+      "properties": {
+        "rule_id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "ID of the rule that was violated."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning", "info"],
+          "description": "Severity: error (must fix), warning (should fix), info (optional)."
+        },
+        "file": {
+          "type": "string",
+          "description": "File where violation was found."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Line number of violation."
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Column number of violation (optional)."
+        },
+        "issue": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Clear description of what's wrong."
+        },
+        "expected": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What the code should look like."
+        },
+        "found": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What was actually found in the code."
+        },
+        "fix_suggestion": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Suggested fix for the violation."
+        }
+      },
+      "required": ["rule_id", "severity", "file", "issue"]
+    }
+  }
+}

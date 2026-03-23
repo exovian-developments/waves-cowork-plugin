@@ -1,0 +1,654 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Company Blueprint Schema",
+  "description": "The complete picture of a company: who it is, what it does, how it makes money, and where it's going. This is the highest-level artifact in the Waves framework — it sits above product blueprints and gives strategic context to everything the company builds and operates.",
+  "$comment": "One per company. This is the source of truth for the company's identity, strategy, products, operations, and finances. Product blueprints answer WHAT a product is; this document answers WHO the company is and WHY it exists. Work section by section with the company founder or leadership. Every section must be validated before proceeding. Sections can start empty and be filled progressively — an empty section is better than a speculative one.",
+  "type": "object",
+  "properties": {
+    "meta": {
+      "type": "object",
+      "description": "Basic information about this document and the company it describes.",
+      "$comment": "Set at creation. Update last_updated on every write.",
+      "properties": {
+        "company_name": {
+          "type": "string",
+          "description": "The official name of the company.",
+          "$comment": "Public-facing name. Use consistently across all references."
+        },
+        "codename": {
+          "type": "string",
+          "description": "Internal short name or abbreviation, if different from the official name.",
+          "$comment": "Optional. Useful for long company names."
+        },
+        "owner": {
+          "type": "string",
+          "description": "The person responsible for this document — usually the founder or CEO.",
+          "$comment": "This person validates every section and makes final decisions on company direction."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this document was first created. Never changes.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this document was last modified.",
+          "$comment": "Update on every write operation to this file."
+        }
+      },
+      "required": ["company_name", "owner", "created_at", "last_updated"]
+    },
+
+    "identity": {
+      "type": "object",
+      "description": "The soul of the company — why it exists, where it's going, and what it stands for.",
+      "$comment": "These are not marketing slogans. Write them as honest statements that guide real decisions. A good vision helps you say NO to things that don't align. A good mission tells someone in 30 seconds what you actually do.",
+      "properties": {
+        "vision": {
+          "type": "string",
+          "description": "¿Cómo se ve el mundo si la empresa tiene éxito? The long-term future state you're working toward — not what you do today, but what the world looks like if everything goes right.",
+          "$comment": "Think 5-10 years out. This should be ambitious but honest. Example: 'Every software team ships validated product increments at the speed their work demands, not at the speed a calendar prescribes.' Avoid generic statements like 'be the best' or 'change the world'."
+        },
+        "mission": {
+          "type": "string",
+          "description": "¿Qué hace la empresa HOY para avanzar hacia esa visión? The concrete work the company does right now to move toward the vision.",
+          "$comment": "This should be specific enough that someone can tell if you're doing it. Example: 'We build frameworks and tools that give AI agents persistent memory and teams organic delivery cycles.' If it could apply to any company, it's too vague."
+        },
+        "values": {
+          "type": "array",
+          "description": "¿Qué principios guían las decisiones difíciles? The principles that tell you what to do when the answer isn't obvious.",
+          "$comment": "These should be actionable and specific to this company. 'Innovation' is not a value — everyone says that. 'Ship small and validate before scaling' is a value because it guides decisions. 3-7 values is the sweet spot. Each value should have a one-line description of what it means IN PRACTICE.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "description": "The principle itself — short and memorable."
+              },
+              "in_practice": {
+                "type": "string",
+                "description": "What this actually means when making decisions. Give a concrete example.",
+                "$comment": "Example: Value='Data over opinion' → In practice='When we disagree on a feature, we run a feasibility analysis with real numbers before deciding — we don't vote.'"
+              }
+            },
+            "required": ["value", "in_practice"]
+          }
+        }
+      },
+      "required": ["vision", "mission"]
+    },
+
+    "market": {
+      "type": "object",
+      "description": "¿Qué problema existe en el mundo que justifica la existencia de esta empresa? The market reality that creates the opportunity.",
+      "$comment": "This is not a marketing pitch. Be brutally honest about the problem, the current reality, and what nobody else is solving. If you can't articulate why the company NEEDS to exist, the company has a problem.",
+      "properties": {
+        "problem": {
+          "type": "string",
+          "description": "¿Qué le duele a la gente que tu empresa puede resolver? The specific pain or inefficiency in the market.",
+          "$comment": "Be concrete. 'Teams waste time' is too vague. 'Teams using AI agents restart every session from scratch because no framework gives agents persistent memory across sessions' is specific."
+        },
+        "opportunity": {
+          "type": "string",
+          "description": "¿Por qué AHORA es el momento correcto para resolver esto? What has changed in the world that makes this problem solvable or urgent today.",
+          "$comment": "This could be a technology shift, a market change, a regulatory change, or a cultural shift. The best opportunities come from structural changes, not just ideas."
+        },
+        "target_market": {
+          "type": "array",
+          "description": "¿A quién le vendes? Las personas o empresas específicas que necesitan lo que tú ofreces.",
+          "$comment": "Not demographics. Real segments you can reach. Each segment should have: who they are, why they care about your solution, and roughly how many exist. Start with the smallest viable segment you can serve TODAY.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "segment": {
+                "type": "string",
+                "description": "A specific group of potential customers."
+              },
+              "why_they_care": {
+                "type": "string",
+                "description": "Why this segment would pay attention to what you offer."
+              },
+              "size_estimate": {
+                "type": "string",
+                "description": "Rough estimate of how many potential customers exist in this segment.",
+                "$comment": "Can be a range or qualitative: '~50K solo developers using AI coding tools', 'small — dozens of enterprise teams in LATAM'. Honesty over precision."
+              }
+            },
+            "required": ["segment", "why_they_care"]
+          }
+        },
+        "competitive_advantage": {
+          "type": "string",
+          "description": "¿Qué hace que sea difícil para otros copiar lo que tú haces? The thing that gets STRONGER as you grow, not weaker.",
+          "$comment": "A real competitive advantage compounds over time. Examples: network effects, proprietary data, deep domain expertise, ecosystem lock-in. 'We work harder' or 'we have a great team' are not advantages — they don't compound. If you don't have one yet, say so honestly and describe what you're building toward."
+        }
+      },
+      "required": ["problem", "opportunity"]
+    },
+
+    "hypothesis": {
+      "type": "string",
+      "description": "¿Cuál es la apuesta central de la empresa? The core bet — if THIS is true, then the company succeeds. If it's wrong, the company needs to pivot.",
+      "$comment": "Write as an if/then statement. Example: 'If AI agents become the primary way software is built, then teams will need a framework designed for AI-speed delivery cycles, and Waves will be the standard because it's the first to solve both process overhead and context persistence simultaneously.' This should be falsifiable — you should be able to imagine evidence that proves it wrong."
+    },
+
+    "strategic_capabilities": {
+      "type": "array",
+      "description": "¿Qué necesita SABER HACER la empresa para que la hipótesis se cumpla? The things the company must be able to do — each one may require one or more products, services, or operational efforts.",
+      "$comment": "These are company-level capabilities, not product features. Example: 'The company can provide any software team with a complete development framework that works across AI agent platforms.' Each capability maps to one or more products that deliver it. If a capability has no product assigned, it's a gap. If a product doesn't map to any capability, question why it exists.",
+      "items": {
+        "$ref": "#/$defs/strategic_capability"
+      }
+    },
+
+    "products": {
+      "type": "array",
+      "description": "¿Qué productos o servicios construye la empresa? Each product has its own product_blueprint.json with full detail. This section is the INDEX — it links products to company capabilities.",
+      "$comment": "Each entry is a pointer to a product, not the product definition itself. The product_blueprint.json in each project's ai_files/ has the full detail. This array answers: what products exist, which company capabilities they serve, and what's their current status. If a product can't trace to a strategic_capability, it may not be aligned with company strategy.",
+      "items": {
+        "$ref": "#/$defs/product_ref"
+      }
+    },
+
+    "operational_areas": {
+      "type": "array",
+      "description": "¿Qué áreas de la empresa NO son productos pero son necesarias para funcionar? Legal, finanzas, marketing, administración, recursos humanos — todo lo que mantiene la empresa viva pero no es un producto que vendes.",
+      "$comment": "Each area can have its own roadmaps for tracking tasks and deadlines. Example: 'Legal' might have a roadmap with milestones like 'Register trademark', 'File annual report', 'Renew business permit'. These roadmaps follow the same Waves structure (waves/wN/roadmap.json) but live in the company's operational repository or in a dedicated ai_files/ structure.",
+      "items": {
+        "$ref": "#/$defs/operational_area"
+      }
+    },
+
+    "revenue_model": {
+      "type": "object",
+      "description": "¿De dónde viene el dinero? How the company generates income — or how it plans to. Even if you're pre-revenue, describing the plan forces clarity.",
+      "$comment": "Be honest about current state. If revenue is $0 today, say so and describe the plan. The revenue_streams array can mix active and planned streams. This section is critical for ECC to show financial health alongside product progress.",
+      "properties": {
+        "current_status": {
+          "type": "string",
+          "enum": ["pre-revenue", "early-revenue", "growing", "stable", "declining"],
+          "description": "Where is the company financially right now?",
+          "$comment": "pre-revenue: no income yet. early-revenue: some income but not sustainable. growing: revenue is increasing. stable: revenue is predictable. declining: revenue is dropping."
+        },
+        "revenue_streams": {
+          "type": "array",
+          "description": "Each way the company makes (or plans to make) money.",
+          "$comment": "Include both active and planned streams. For planned streams, indicate what needs to happen before they activate.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "stream": {
+                "type": "string",
+                "description": "What is this source of income? Be specific.",
+                "$comment": "Example: 'SaaS subscription for ECC Pro', 'Consulting for Waves implementation', 'Open source sponsorships'."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["active", "planned", "exploring"],
+                "description": "Is this stream generating income now, or is it planned?"
+              },
+              "description": {
+                "type": "string",
+                "description": "How does this stream work? Who pays, how much, and for what?",
+                "$comment": "Be concrete: 'Companies pay $X/month for hosted ECC with analytics dashboard' not 'SaaS revenue'."
+              }
+            },
+            "required": ["stream", "status"]
+          }
+        }
+      }
+    },
+
+    "channels": {
+      "type": "array",
+      "description": "¿Cómo llegan tus productos a las manos de tus usuarios? The paths through which people discover, try, and start using what you build. If nobody knows your product exists, it doesn't matter how good it is.",
+      "$comment": "List every way users can find and access your products. Include both current and planned channels. For each channel, note whether it's working or experimental. Examples: GitHub (open source discovery), exovian.dev (direct), Homebrew (developer tool distribution), App Store (mobile), word of mouth, content marketing, conference talks.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "description": "The specific channel or distribution path."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["discovery", "acquisition", "retention"],
+            "description": "¿Este canal sirve para que te DESCUBRAN, para que EMPIECEN a usar el producto, o para que SIGAN usándolo?",
+            "$comment": "discovery: how people find out you exist. acquisition: how people go from knowing about you to actually using your product. retention: how you keep them engaged."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "planned", "experimental"],
+            "description": "Is this channel being used now?"
+          },
+          "products": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Which products use this channel? Use product codenames."
+          }
+        },
+        "required": ["channel", "type", "status"]
+      }
+    },
+
+    "partnerships": {
+      "type": "array",
+      "description": "¿De quién dependes para que tu empresa funcione? External companies, platforms, or services that are critical to your operation. If they disappear or change terms tomorrow, how badly does it hurt?",
+      "$comment": "Be honest about dependencies. A partnership with high dependency and no alternative is a risk. List the relationship, what you depend on them for, and what your fallback plan is (if any). This helps ECC flag risks when a partner announces changes.",
+      "items": {
+        "$ref": "#/$defs/partnership"
+      }
+    },
+
+    "cost_structure": {
+      "type": "object",
+      "description": "¿Cuánto cuesta mantener todo funcionando? The recurring costs the company must cover to stay alive. Even before revenue, knowing your burn rate is critical.",
+      "$comment": "List real costs, not estimates. Include monthly/annual amounts where known. This connects to revenue_model to show whether the numbers work. ECC can track these and alert when costs approach or exceed revenue.",
+      "properties": {
+        "monthly_burn_estimate": {
+          "type": "string",
+          "description": "¿Cuánto gasta la empresa por mes aproximadamente? A rough total — doesn't need to be exact.",
+          "$comment": "Example: '~$150/month (mostly hosting + domains + API costs)'. Update when costs change significantly."
+        },
+        "recurring_costs": {
+          "type": "array",
+          "description": "Each specific cost the company pays regularly.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "item": {
+                "type": "string",
+                "description": "What are you paying for?"
+              },
+              "amount": {
+                "type": "string",
+                "description": "How much? Include currency and period.",
+                "$comment": "Example: '$20/month', '~$200/year', 'free tier (for now)'. Be honest about free tiers that will eventually cost money."
+              },
+              "category": {
+                "type": "string",
+                "enum": ["infrastructure", "tools", "services", "legal", "marketing", "team", "other"],
+                "description": "What type of cost is this?"
+              },
+              "critical": {
+                "type": "boolean",
+                "description": "If you stop paying this tomorrow, does something break?",
+                "$comment": "true = production goes down or legal problems. false = inconvenient but survivable."
+              }
+            },
+            "required": ["item", "amount", "category"]
+          }
+        }
+      }
+    },
+
+    "team": {
+      "type": "array",
+      "description": "¿Quién hace qué en la empresa? The people (and AI agents) that make things happen. Include roles, not just names — roles persist even if people change.",
+      "$comment": "List actual team members with their responsibilities. Include AI agents if they have defined roles (e.g., 'Claude Code — implements features following logbook objectives'). This helps ECC show who is responsible for what across the ecosystem.",
+      "items": {
+        "$ref": "#/$defs/team_member"
+      }
+    },
+
+    "key_dates": {
+      "type": "array",
+      "description": "¿Qué fechas NO puedes olvidar? Deadlines that have real consequences if missed — government permits, contract renewals, tax filings, investor meetings, product launches, partnership deadlines.",
+      "$comment": "These are not project milestones (those go in roadmaps). These are COMPANY-level dates with external consequences. ECC should read this array and alert the owner when a deadline is approaching. Include a reminder_days field so ECC knows when to start alerting. Dates that pass should be marked as completed or missed, never deleted.",
+      "items": {
+        "$ref": "#/$defs/key_date"
+      }
+    },
+
+    "company_roadmaps": {
+      "type": "array",
+      "description": "Roadmaps que no pertenecen a un producto específico — tareas operativas, cross-product, o de la empresa como organización. Most recent first (prepend-only, same as product_roadmaps).",
+      "$comment": "Managed by roadmap-create when creating roadmaps at company level. These roadmaps follow the same Waves structure but track work that isn't tied to a single product. Examples: 'Legal compliance roadmap', 'Marketing launch roadmap', 'Infrastructure setup roadmap', 'Cross-product extraction roadmap' (like exovian_platform).",
+      "items": {
+        "$ref": "#/$defs/company_roadmap_ref"
+      },
+      "default": []
+    },
+
+    "design_principles": {
+      "type": "array",
+      "description": "¿Qué reglas sigue la empresa cuando tiene que tomar decisiones difíciles? Principles that guide HOW the company operates — not what it builds, but how it builds and makes decisions.",
+      "$comment": "These are company-level principles, not product-level (those go in each product_blueprint). Example: 'Ship and validate before perfecting — a working product in users' hands teaches more than a perfect product in development.' 3-7 principles. Each should be specific enough to settle a real disagreement.",
+      "items": {
+        "$ref": "#/$defs/design_principle"
+      }
+    },
+
+    "company_decisions": {
+      "type": "array",
+      "description": "Decisiones importantes que afectan a toda la empresa — no a un producto individual. If a decision affects only one product, it goes in that product's blueprint.",
+      "$comment": "Record EVERY significant company-level decision: pivots, market changes, team changes, partnership decisions, financial decisions, strategic direction changes. Include enough context that a future reader understands WHY without asking anyone.",
+      "items": {
+        "$ref": "#/$defs/company_decision"
+      }
+    },
+
+    "open_questions": {
+      "type": "array",
+      "description": "Preguntas importantes que aún no tienen respuesta. When resolved, the answer becomes a decision, a new capability, or a change in strategy.",
+      "$comment": "Review at every strategic session. When resolved: set status to 'resolved', fill resolution, and create the corresponding entry in company_decisions if the resolution is significant. Do not delete resolved questions — keep for audit trail.",
+      "items": {
+        "$ref": "#/$defs/open_question"
+      }
+    }
+  },
+
+  "required": [
+    "meta", "identity", "market", "hypothesis",
+    "strategic_capabilities", "products"
+  ],
+
+  "$defs": {
+    "strategic_capability": {
+      "type": "object",
+      "description": "Something the company needs to be able to DO to fulfill its hypothesis.",
+      "$comment": "Map each capability to the products that deliver it. A capability without products is a gap. A product without capabilities is misaligned.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier."
+        },
+        "capability": {
+          "type": "string",
+          "description": "What must the company be able to do?",
+          "$comment": "Write as a concrete ability: 'The company can provide any software team with a structured development framework that works across AI platforms.' Not features — capabilities."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["achieved", "in_progress", "planned", "gap"],
+          "description": "achieved: we can do this today. in_progress: we're building toward it. planned: we know how but haven't started. gap: we need this but don't know how yet."
+        },
+        "product_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Product codenames that deliver this capability. Empty array = gap.",
+          "$comment": "Use the codename from the products array. A capability can be delivered by multiple products working together."
+        },
+        "description": {
+          "type": "string",
+          "description": "Additional context on what this capability means and why it matters."
+        }
+      },
+      "required": ["id", "capability", "status"]
+    },
+
+    "product_ref": {
+      "type": "object",
+      "description": "A pointer to a product the company builds or operates.",
+      "$comment": "The full product definition lives in the product's own ai_files/blueprint.json. This is just the reference that connects it to the company strategy.",
+      "properties": {
+        "codename": {
+          "type": "string",
+          "description": "Internal product codename. Must match meta.product_codename in the product's blueprint."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable product name."
+        },
+        "blueprint_path": {
+          "type": "string",
+          "description": "Where to find the product's blueprint. Use portable format: org/repo::ai_files/blueprint.json",
+          "$comment": "For products in the same GitHub org, use: org/repo::ai_files/blueprint.json. ECC resolves this via GitHub API."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "in_development", "planned", "paused", "archived"],
+          "description": "Current lifecycle status of the product."
+        },
+        "capability_refs": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "IDs of strategic_capabilities this product delivers.",
+          "$comment": "Connect every product to at least one company capability."
+        },
+        "description": {
+          "type": "string",
+          "description": "One-line summary of what this product does."
+        }
+      },
+      "required": ["codename", "name", "status"]
+    },
+
+    "operational_area": {
+      "type": "object",
+      "description": "A non-product function of the company.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier."
+        },
+        "name": {
+          "type": "string",
+          "description": "Area name: Legal, Finance, Marketing, HR, Operations, etc."
+        },
+        "description": {
+          "type": "string",
+          "description": "What does this area cover? Be specific to YOUR company, not generic."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Who is responsible for this area?"
+        }
+      },
+      "required": ["id", "name"]
+    },
+
+    "partnership": {
+      "type": "object",
+      "description": "An external dependency or partnership.",
+      "properties": {
+        "partner": {
+          "type": "string",
+          "description": "Company or platform name."
+        },
+        "what_we_use": {
+          "type": "string",
+          "description": "What specifically do we depend on from them?"
+        },
+        "dependency_level": {
+          "type": "string",
+          "enum": ["critical", "important", "convenient"],
+          "description": "critical: company stops functioning without them. important: significant disruption but survivable. convenient: makes things easier but alternatives exist."
+        },
+        "fallback": {
+          "type": ["string", "null"],
+          "description": "What's the plan if this partner disappears or changes terms? Null if no fallback exists (which is a risk)."
+        },
+        "contract_end": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "When does the agreement/plan/subscription expire? Null if no expiration.",
+          "$comment": "ECC can use this to alert before expiration."
+        }
+      },
+      "required": ["partner", "what_we_use", "dependency_level"]
+    },
+
+    "team_member": {
+      "type": "object",
+      "description": "A person or AI agent with defined responsibilities.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Person's name or agent identifier."
+        },
+        "role": {
+          "type": "string",
+          "description": "Their role in the company."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["human", "ai_agent"],
+          "description": "Is this a person or an AI agent?"
+        },
+        "responsibilities": {
+          "type": "string",
+          "description": "What are they specifically responsible for?",
+          "$comment": "Be concrete. Not 'development' but 'implements features in app_base and backend_base following logbook objectives'."
+        },
+        "products": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Product codenames this person/agent works on."
+        }
+      },
+      "required": ["name", "role", "type"]
+    },
+
+    "key_date": {
+      "type": "object",
+      "description": "A date with real consequences if missed.",
+      "$comment": "ECC reads these and alerts the owner. Never delete past dates — mark as completed or missed.",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "The deadline or event date (YYYY-MM-DD)."
+        },
+        "description": {
+          "type": "string",
+          "description": "What happens on this date? Why does it matter?"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["legal", "financial", "partnership", "product_launch", "team", "other"],
+          "description": "What type of deadline is this?"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["upcoming", "completed", "missed", "rescheduled"],
+          "description": "Current status of this deadline."
+        },
+        "reminder_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many days before the date should ECC start alerting?",
+          "$comment": "For critical deadlines (government permits), use 30-60 days. For routine deadlines, 7-14 days."
+        },
+        "impact": {
+          "type": "string",
+          "description": "What happens if this date is missed?",
+          "$comment": "Be concrete: 'Fine of $500 + business license suspended' not 'bad things happen'."
+        }
+      },
+      "required": ["date", "description", "category", "status"]
+    },
+
+    "company_roadmap_ref": {
+      "type": "object",
+      "description": "Reference to a company-level roadmap (non-product work).",
+      "$comment": "Same prepend-only convention as product_roadmaps. Most recent first.",
+      "properties": {
+        "wave": {
+          "type": "string",
+          "description": "Wave identifier."
+        },
+        "path": {
+          "type": "string",
+          "description": "Relative path to the roadmap file.",
+          "$comment": "Standard format: waves/wN/roadmap.json. For cross-repo: org/repo::waves/wN/roadmap.json."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["operational", "cross-product", "infrastructure"],
+          "description": "operational: company admin tasks. cross-product: work spanning multiple products. infrastructure: shared technical platform work."
+        }
+      },
+      "required": ["wave", "path", "scope"]
+    },
+
+    "design_principle": {
+      "type": "object",
+      "description": "A company-level principle that guides decisions.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier."
+        },
+        "principle": {
+          "type": "string",
+          "description": "The principle itself."
+        },
+        "in_practice": {
+          "type": "string",
+          "description": "What does this look like in a real decision?",
+          "$comment": "Give a concrete example of how this principle has been or would be applied."
+        }
+      },
+      "required": ["id", "principle"]
+    },
+
+    "company_decision": {
+      "type": "object",
+      "description": "A significant company-level decision with full context.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this decision was made."
+        },
+        "decision": {
+          "type": "string",
+          "description": "What was decided?"
+        },
+        "context": {
+          "type": "string",
+          "description": "Why was this decided? What alternatives were considered?",
+          "$comment": "Include enough context that someone reading this in 6 months understands WHY without asking anyone."
+        },
+        "impact": {
+          "type": "string",
+          "description": "What does this decision affect?",
+          "$comment": "Reference products, capabilities, or operational areas by name."
+        }
+      },
+      "required": ["id", "created_at", "decision", "context"]
+    },
+
+    "open_question": {
+      "type": "object",
+      "description": "A question that doesn't have an answer yet.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this question was raised."
+        },
+        "question": {
+          "type": "string",
+          "description": "The question itself."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "resolved"],
+          "description": "Is this still unanswered?"
+        },
+        "resolution": {
+          "type": ["string", "null"],
+          "description": "How the question was resolved. Null while open."
+        }
+      },
+      "required": ["id", "created_at", "question", "status"]
+    }
+  }
+}

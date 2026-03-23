@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProjectDevelopmentRules",
+  "description": "Structured catalog of project-wide development rules organized by sections.",
+  "type": "object",
+  "required": ["project_name", "project_description", "language", "type", "rules"],
+  "properties": {
+    "project_name": {
+      "type": "string",
+      "description": "Human-readable name of the project."
+    },
+    "project_description": {
+      "type": "string",
+      "maxLength": 1600,
+      "description": "Short explanation of the project's purpose and context.",
+      "$comment": "Analyze /ai_files/project_manifest.json to have a better understanding of the project."
+    },
+
+    "language": {
+      "type": "string",
+      "description": "Main programming language of the project. Example: 'dart', 'kotlin', 'typescript'."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["frontend", "backend", "fullstack"],
+      "description": "Project scope. Determines which rule sections apply."
+    },
+    "rules": {
+      "type": "object",
+      "description": "Organized rule sections depending on type and general categories. Add a section only when a rule for that section needs to be created",
+      "properties": {
+        "architecture": { "$ref": "#/$defs/ruleList" },
+        "testing": { "$ref": "#/$defs/ruleList" },
+        "naming_conventions": { "$ref": "#/$defs/ruleList" },
+        "presentation_layer": { "$ref": "#/$defs/ruleList" },
+        "data_layer": { "$ref": "#/$defs/ruleList" },
+        "api_layer": { "$ref": "#/$defs/ruleList" },
+        "infra": { "$ref": "#/$defs/ruleList" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "ruleList": {
+      "type": "array",
+      "description": "List of rules for a given category or section.",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "rule": {
+      "type": "object",
+      "description": "Single concise rule with numeric identifier and timestamps.",
+      "required": ["id", "created_at", "description"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Numeric identifier for the rule (start at 1 and increment by 1).",
+          "$comment": "Stable rule identifier. This field should be created once and not changed."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when the rule was created.",
+          "$comment": "This field is created and should never be modified again."
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when the rule was last updated.",
+          "$comment": "Update this when making changes to the rule's description or scope."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 280,
+          "description": "Concise project rule. Must not be overly long or context-dependent."
+        }
+      },
+      "$comment": "When creating a rule: - Must apply the YAGNI principle to avoid overengineering. - Avoid creating rules for hypothetical scenarios or future features that may never be implemented. Focus on current project needs and avoid unnecessary complexity."
+    }
+  },
+  "$comment": "All rules are mandatory, only create a new rule if it meets all the following criteria: - Promotes project-wide consistency. Improves code clarity, structure, and long-term maintainability. - Does not contradict or create ambiguity with other rules. - Establishes consistent project-wide implementation patterns that define how things should be done, and may include technical details when part of the project's standard practices, but not situational configurations or tool-specific setups. - Can be applied without requiring situational context or knowledge of a specific library. "
+}

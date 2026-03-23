@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Project Standards Schema",
+  "description": "Structured catalog of project-wide standards and guidelines for non-software projects. Adaptable to academic, creative, business, or personal projects.",
+  "type": "object",
+  "$comment": "This schema is intentionally open. Add sections that best represent your project's standards. The predefined sections are suggestions—rename or add as needed for your domain.",
+
+  "required": ["project_name", "project_type", "standards"],
+
+  "properties": {
+    "project_name": {
+      "type": "string",
+      "description": "Human-readable name of the project.",
+      "$comment": "Examples: 'Master Thesis: AI Ethics', 'Acme Brand Redesign', 'Q4 Sales Strategy'."
+    },
+    "project_type": {
+      "type": "string",
+      "description": "Category of project to provide context for standards.",
+      "$comment": "Examples: 'academic_thesis', 'research_paper', 'creative_design', 'marketing_campaign', 'business_plan'."
+    },
+    "project_description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Brief explanation of the project's purpose and scope.",
+      "$comment": "Provides context for why these standards exist and how they should be applied."
+    },
+
+    "standards": {
+      "type": "object",
+      "description": "Organized standard sections. Add sections relevant to your project domain.",
+      "$comment": "Predefined sections are suggestions. Add custom sections as needed: 'citation_format', 'brand_voice', 'legal_compliance', etc.",
+      "properties": {
+        "formatting": {
+          "$ref": "#/$defs/standardList",
+          "$comment": "Document formatting rules. Examples: 'Use 12pt Times New Roman, double-spaced' (academic), 'All deliverables in PDF format with embedded fonts' (creative), 'Executive summaries max 1 page' (business)."
+        },
+        "style": {
+          "$ref": "#/$defs/standardList",
+          "$comment": "Writing or visual style guidelines. Examples: 'Formal academic tone, third person' (academic), 'Brand voice: professional yet approachable' (creative), 'Data-driven language with clear metrics' (business)."
+        },
+        "citations": {
+          "$ref": "#/$defs/standardList",
+          "$comment": "Reference and citation standards. Examples: 'APA 7th edition for all citations' (academic), 'Credit all stock images in appendix' (creative), 'Source all market data with date accessed' (business)."
+        },
+        "deliverables": {
+          "$ref": "#/$defs/standardList",
+          "$comment": "Standards for project outputs. Examples: 'All chapters include abstract and keywords' (academic), 'Logo variations: full color, mono, reversed' (creative), 'All reports include executive summary' (business)."
+        },
+        "review_process": {
+          "$ref": "#/$defs/standardList",
+          "$comment": "Quality assurance and review standards. Examples: 'Advisor review before each chapter submission' (academic), 'Client approval required at each milestone' (creative), 'Peer review for all financial projections' (business)."
+        },
+        "communication": {
+          "$ref": "#/$defs/standardList",
+          "$comment": "Communication guidelines. Examples: 'Weekly progress updates to advisor' (academic), 'All client communication via project manager' (creative), 'Stakeholder updates every Monday' (business)."
+        },
+        "ethics_compliance": {
+          "$ref": "#/$defs/standardList",
+          "$comment": "Ethical and compliance standards. Examples: 'IRB approval required for human subjects' (academic), 'GDPR compliant data handling' (creative), 'Financial projections must include assumptions' (business)."
+        }
+      }
+    },
+
+    "notes": {
+      "type": "object",
+      "description": "Additional context, exceptions, or recommendations.",
+      "$comment": "Flexible section for information that doesn't fit standard categories.",
+      "properties": {
+        "exceptions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Known exceptions to the standards.",
+          "$comment": "Document any approved deviations from standards."
+        },
+        "pending_decisions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Standards that need clarification or approval.",
+          "$comment": "Track standards that are not yet finalized."
+        },
+        "references": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "External resources or guides these standards are based on.",
+          "$comment": "Examples: 'University Thesis Guidelines 2024', 'Client Brand Book v3', 'Industry Best Practices Report'."
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "standardList": {
+      "type": "array",
+      "description": "List of standards for a given category.",
+      "items": {
+        "$ref": "#/$defs/standard"
+      }
+    },
+    "standard": {
+      "type": "object",
+      "description": "Single standard or guideline with identifier and timestamps.",
+      "required": ["id", "created_at", "description"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Numeric identifier for the standard (sequential within section).",
+          "$comment": "Stable identifier. Create once, never change. Allows referencing: 'Apply standard formatting #3'."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when the standard was created.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when the standard was last updated.",
+          "$comment": "Update when modifying description or scope."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Clear, actionable standard. Should be verifiable.",
+          "$comment": "Write standards that can be objectively checked. Good: 'All figures must have captions and source citations'. Avoid: 'Make it look professional'."
+        },
+        "rationale": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Why this standard exists.",
+          "$comment": "Optional. Helps future team members understand the reasoning."
+        },
+        "source": {
+          "type": "string",
+          "description": "Where this standard comes from.",
+          "$comment": "Examples: 'University guidelines', 'Client request', 'Industry best practice', 'Team decision'."
+        }
+      },
+      "$comment": "Create standards that are: specific and verifiable, applicable throughout the project, not contradicting other standards. Apply YAGNI: only create standards for current needs, not hypothetical scenarios."
+    }
+  }
+}

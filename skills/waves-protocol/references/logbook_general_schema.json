@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Logbook Schema (General Projects)",
+  "description": "Schema for tracking context across sessions in non-software projects (academic, creative, business, other). Supports long-term memory, objective tracking with actionable guidance, and progress documentation.",
+  "type": "object",
+  "properties": {
+    "ticket": {
+      "type": "object",
+      "description": "Metadata of the task, milestone, or deliverable that anchors this logbook. This is the ultimate goal that all objectives contribute to.",
+      "$comment": "Populate from user input. Title and description are required. URL is optional (link to project management tool, shared document, etc.).",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Title of the task, milestone, or deliverable. Should be concise and descriptive.",
+          "$comment": "Ask user for clear title. Keep under 100 characters."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to related resource (project management tool, shared document, reference material).",
+          "$comment": "Optional. Leave empty string if no external resource. Examples: Notion page, Google Doc, Trello card."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation of what needs to be accomplished. Includes acceptance criteria, deadlines, or constraints if available.",
+          "$comment": "Ask user to explain thoroughly. Include: deliverables, deadlines, stakeholders, constraints."
+        }
+      },
+      "required": ["title", "description"]
+    },
+
+    "objectives": {
+      "type": "object",
+      "description": "Project objectives organized by priority. Main objectives define high-level deliverables. Secondary objectives are actionable steps with guidance.",
+      "$comment": "Main objectives provide context and references. Secondary objectives provide step-by-step guidance. Both can be populated together.",
+      "properties": {
+        "main": {
+          "type": "array",
+          "description": "Primary objectives that define major deliverables or milestones.",
+          "$comment": "Each main objective should have clear context and reference materials. For academic: chapters, papers. For creative: assets, deliverables. For business: milestones, documents.",
+          "items": {
+            "$ref": "#/$defs/main_objective"
+          }
+        },
+        "secondary": {
+          "type": "array",
+          "description": "Actionable objectives that contribute to main objectives. Each contains specific guidance for completion.",
+          "$comment": "Break down main objectives into completable steps. Provide guidance referencing documents, examples, standards, or best practices.",
+          "items": {
+            "$ref": "#/$defs/secondary_objective"
+          }
+        }
+      },
+      "required": ["main", "secondary"]
+    },
+
+    "recent_context": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Running log of recent interactions, findings, decisions, and progress. Newest entries at index 0. Sliding window that compacts to history_summary when full.",
+      "$comment": "Prepend new entries at index 0. When array exceeds maxItems, remove last (oldest) entry and summarize it to history_summary. Never replace entire array.",
+      "items": {
+        "type": "object",
+        "description": "Single context entry representing a meaningful interaction, finding, or decision.",
+        "$comment": "Create entry for: progress updates, important findings, decisions made, blockers encountered, feedback received. Keep content focused and actionable.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unique identifier for this entry. Immutable once created.",
+            "$comment": "Start at 1, increment by 1 globally across all entries. Never reuse IDs."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when entry was created (ISO 8601). Immutable.",
+            "$comment": "Set once at creation. Never modify."
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1200,
+            "description": "Entry content describing action, decision, finding, or progress. Should be meaningful and provide context for future sessions.",
+            "$comment": "Write concisely but completely. Include: what happened, why it matters, any decisions made. Future sessions will use this to understand context."
+          },
+          "mood": {
+            "type": "string",
+            "description": "User's emotional state during this entry if observable (focused, frustrated, excited, uncertain, overwhelmed).",
+            "$comment": "Optional. Only populate if user mood is clearly observable. Helps adjust communication style."
+          }
+        },
+        "required": ["id", "created_at", "content"]
+      }
+    },
+
+    "history_summary": {
+      "type": "array",
+      "maxItems": 10,
+      "description": "Compact summaries of entries removed from recent_context. Preserves continuity when short-term memory is full. Newest at index 0.",
+      "$comment": "Write here ONLY when truncating recent_context. Summarize removed entry in max 140 chars. Prepend at index 0. If exceeds maxItems, remove oldest (last) entry.",
+      "items": {
+        "type": "object",
+        "description": "Compressed summary of a removed recent_context entry.",
+        "$comment": "Capture essential information only: what was done, key decision, or important finding.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unique identifier for this summary. Immutable once created.",
+            "$comment": "Start at 1, increment by 1. Separate sequence from recent_context IDs."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when summary was created (ISO 8601). Immutable.",
+            "$comment": "Set once at creation. Never modify."
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 140,
+            "description": "Compressed summary of removed entry. Must capture essential information.",
+            "$comment": "Summarize in tweet-length. Focus on: what was done, outcome, or key decision."
+          },
+          "mood": {
+            "type": "string",
+            "description": "User's emotional state at time of original entry if it was recorded.",
+            "$comment": "Optional. Preserve from original entry if present."
+          }
+        },
+        "required": ["id", "created_at", "content"]
+      }
+    },
+
+    "future_reminders": {
+      "type": "array",
+      "description": "User-created reminders for future sessions. Agent surfaces these when their time arrives.",
+      "$comment": "Only add reminders when user explicitly requests. Check this array at session start and surface any due reminders.",
+      "items": {
+        "type": "object",
+        "description": "A scheduled reminder to surface in a future session.",
+        "$comment": "Create only on explicit user request. Remove after surfacing to user.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unique identifier for this reminder. Immutable once created.",
+            "$comment": "Start at 1, increment by 1. Never reuse IDs."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when reminder was created (ISO 8601). Immutable.",
+            "$comment": "Set once at creation. Never modify."
+          },
+          "content": {
+            "type": "string",
+            "description": "Reminder message to surface to user when due.",
+            "$comment": "Write exactly what user wants to be reminded about. Include any context needed."
+          },
+          "when": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when this reminder should be surfaced to user.",
+            "$comment": "Compare against current time at session start. Surface if current time >= when."
+          }
+        },
+        "required": ["id", "created_at", "content", "when"]
+      }
+    }
+  },
+
+  "required": ["ticket", "objectives", "recent_context", "history_summary", "future_reminders"],
+
+  "$defs": {
+    "main_objective": {
+      "type": "object",
+      "description": "High-level objective defining a major deliverable or milestone. Provides context and reference materials for deeper work.",
+      "$comment": "Define clear outcomes with supporting context. References can be documents, URLs, assets, or any relevant materials. Standards can be style guides, regulations, methodologies, or best practices.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier for this main objective. Immutable once created.",
+          "$comment": "Start at 1, increment by 1. Never reuse IDs even after abandonment."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when objective was created (ISO 8601). Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 180,
+          "description": "Verifiable outcome statement that serves as acceptance criteria. When this statement is true, the objective is achieved.",
+          "$comment": "Write as outcome, not task. Validate: Can you clearly determine if this is done? If not, rewrite to be more specific."
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Rationale and background: who needs this, what problem it solves, deadlines, dependencies, or constraints.",
+          "$comment": "Include information that helps make decisions. Reference stakeholders, deadlines, dependencies, or quality standards."
+        },
+        "scope": {
+          "type": "object",
+          "description": "Boundaries for this objective: reference materials and standards/guidelines to follow.",
+          "$comment": "References are starting points (documents, URLs, assets, examples). Standards are guidelines (style guides, regulations, methodologies, best practices).",
+          "properties": {
+            "references": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": "Reference materials for this objective: documents, URLs, assets, examples, or prior work to build upon.",
+              "$comment": "List relevant materials. Examples: 'Chapter 2 draft in Google Docs', 'Competitor analysis PDF', 'Brand guidelines v2', 'client_feedback_notes.md', 'https://example.com/reference'."
+            },
+            "standards": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 150
+              },
+              "description": "Guidelines, standards, or methodologies to follow. Empty array if none defined.",
+              "$comment": "List applicable standards. Examples: 'APA 7th edition citation format', 'Brand voice guidelines', 'ISO 27001 compliance', 'Lean Canvas methodology'."
+            }
+          },
+          "required": ["references"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_started", "active", "blocked", "achieved", "abandoned"],
+          "description": "Current state: not_started (pending work), active (in progress), blocked (waiting on external input), achieved (completed), abandoned (cancelled).",
+          "$comment": "Set only ONE main objective as 'active' at a time. Use 'blocked' when waiting for feedback, resources, or dependencies. Set 'achieved' when content statement is verified true."
+        }
+      },
+      "required": ["id", "created_at", "content", "context", "scope", "status"]
+    },
+
+    "secondary_objective": {
+      "type": "object",
+      "description": "Actionable objective that contributes to a main objective. Contains specific guidance for completion.",
+      "$comment": "Break work into completable steps. Provide guidance referencing documents, examples, standards, or established practices. Each should be achievable in a focused work session.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier across all secondary objectives. Immutable once created.",
+          "$comment": "Start at 1, increment globally across all secondary objectives. Never reuse IDs."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when objective was created (ISO 8601). Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 180,
+          "description": "Specific verifiable outcome that contributes to task completion. Should be completable in a focused work session.",
+          "$comment": "Be granular. Validate: Can this be completed and verified in one session? If not, split into multiple objectives."
+        },
+        "completion_guide": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": "Step-by-step guidance for completing this objective. References documents, examples, standards, or established practices.",
+          "$comment": "Each item should provide actionable guidance. Reference specific documents, sections, examples, or standards. Examples: 'Follow structure from Chapter 1 introduction', 'Use client feedback from meeting notes dated Jan 15', 'Apply APA format for all citations', 'Reference competitor X landing page for layout inspiration'."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_started", "active", "blocked", "achieved", "abandoned"],
+          "description": "Current state: not_started (pending work), active (in progress), blocked (waiting on external input), achieved (completed), abandoned (cancelled).",
+          "$comment": "Set only ONE secondary objective as 'active' at a time. Work sequentially. Set 'achieved' after verifying content statement is true."
+        }
+      },
+      "required": ["id", "created_at", "content", "completion_guide", "status"]
+    }
+  }
+}

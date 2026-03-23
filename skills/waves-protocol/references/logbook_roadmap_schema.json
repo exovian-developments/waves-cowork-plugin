@@ -1,0 +1,398 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Logbook Roadmap Schema",
+  "description": "Product-level roadmap with rolling context. Orchestrates phases and milestones that spawn individual logbooks. Sits above logbook_software_schema and logbook_general_schema in the artifact hierarchy: blueprint (WHAT/WHY) → roadmap (WHEN/ORDER) → logbook (HOW).",
+  "$comment": "One per product. This is the strategic orchestrator — it tracks phases, milestones, and decisions at the product level. Detailed implementation lives in individual logbooks referenced via milestones[].logbook_ref. Do NOT duplicate logbook-level detail (completion_guides, scope.files, recommendations) here.",
+  "type": "object",
+  "properties": {
+    "product": {
+      "type": "object",
+      "description": "Product identity and lifecycle metadata.",
+      "$comment": "Set at creation. Update last_updated on every write operation to this file. Status reflects the overall product lifecycle, not any individual phase.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Official product name.",
+          "$comment": "The public-facing name. Use this consistently across all references."
+        },
+        "codename": {
+          "type": "string",
+          "description": "Internal codename if different from public name.",
+          "$comment": "Optional. Useful when the product has an internal working name different from the marketed name."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "One-paragraph product description at business level.",
+          "$comment": "What it does, for whom, why it matters. No technical jargon. A stakeholder should understand this without context."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Product owner — person ultimately responsible for product decisions.",
+          "$comment": "Name or identifier. This person approves phase transitions and major decisions."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when this roadmap was created. Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp of last modification to this file.",
+          "$comment": "Update on every write operation. Reflects freshness of the roadmap."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["planning", "active", "paused", "completed", "archived"],
+          "description": "Overall product lifecycle status.",
+          "$comment": "planning: still designing phases/vision. active: at least one phase in progress. paused: development on hold. completed: all phases done. archived: no longer maintained."
+        }
+      },
+      "required": ["name", "description", "owner", "created_at", "last_updated", "status"]
+    },
+
+    "vision": {
+      "type": "object",
+      "description": "Product vision — the strategic WHY. Concise summary that guides prioritization without opening the full blueprint.",
+      "$comment": "If a product_blueprint exists, extract and compress from there. If not, capture directly from product owner. Keep each field concise — the blueprint has the full detail.",
+      "properties": {
+        "problem": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "The pain this product solves.",
+          "$comment": "One paragraph. Answer: What hurts? Why is it real? Why is it unsolved?"
+        },
+        "mission": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What the product does day-to-day for users.",
+          "$comment": "Operational, not aspirational. The daily commitment to users. Aligns with blueprint section 4."
+        },
+        "target_users": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "description": "User types that interact with this product.",
+          "$comment": "One string per user type. Format: 'Role — what they need from the product'. Keep to 2-5 users. These map to roles and permissions in the system."
+        },
+        "success_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 150
+          },
+          "description": "How we know the product is working.",
+          "$comment": "Optional. Verifiable statements. Aligns with blueprint section 13 (metrics). If the blueprint exists, extract the top 3-5 most important metrics."
+        }
+      },
+      "required": ["problem", "mission", "target_users"]
+    },
+
+    "phases": {
+      "type": "array",
+      "description": "Ordered development phases. Each groups related milestones into a deliverable unit.",
+      "$comment": "Phases execute sequentially unless depends_on says otherwise. Only ONE phase should be 'active' at a time. When all milestones in a phase are 'completed', mark the phase as 'completed' and activate the next eligible phase.",
+      "items": {
+        "$ref": "#/$defs/phase"
+      }
+    },
+
+    "decisions": {
+      "type": "array",
+      "description": "Product-level decisions log. Once recorded, a decision stands unless explicitly revised with a new entry.",
+      "$comment": "Add entry for every significant decision: architecture choice, scope change, technology selection, feature cut, role definition. If a decision isn't here, it wasn't decided. This prevents re-discussion. Aligns with blueprint section 15.",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+
+    "open_questions": {
+      "type": "array",
+      "description": "Questions that cannot be answered yet. When resolved, move answer to decisions if it was a decision, or remove if it was informational.",
+      "$comment": "Add questions discovered during planning, client meetings, or implementation. Review at every session start. Aligns with blueprint section 16.",
+      "items": {
+        "$ref": "#/$defs/open_question"
+      }
+    },
+
+    "recent_context": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Running log of recent interactions, findings, decisions, and progress at the product level. Newest entries at index 0.",
+      "$comment": "Same mechanics as logbook_software_schema. Prepend new entries at index 0. When array exceeds maxItems, remove last (oldest) entry and summarize to history_summary. Use for product-level context only — ticket-level progress goes in individual logbooks.",
+      "items": {
+        "$ref": "#/$defs/context_entry"
+      }
+    },
+
+    "history_summary": {
+      "type": "array",
+      "maxItems": 10,
+      "description": "Compact summaries of entries removed from recent_context. Preserves long-term continuity.",
+      "$comment": "Same mechanics as logbook_software_schema. Write here ONLY when truncating recent_context. Max 140 chars per entry. Prepend at index 0.",
+      "items": {
+        "$ref": "#/$defs/history_entry"
+      }
+    },
+
+    "future_reminders": {
+      "type": "array",
+      "description": "Scheduled reminders for future sessions.",
+      "$comment": "Same mechanics as logbook_software_schema. Only add on explicit user request. Check at session start and surface any due reminders.",
+      "items": {
+        "$ref": "#/$defs/reminder"
+      }
+    }
+  },
+
+  "required": ["product", "vision", "phases", "decisions", "open_questions", "recent_context", "history_summary", "future_reminders"],
+
+  "$defs": {
+    "phase": {
+      "type": "object",
+      "description": "A development phase grouping related milestones into a deliverable unit.",
+      "$comment": "Phases are the highest organizational unit. Each phase should represent a cohesive set of capabilities that can be released or demonstrated together.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique phase identifier. Immutable once created.",
+          "$comment": "Start at 1, increment by 1. Never reuse IDs even if a phase is removed."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Short phase name.",
+          "$comment": "Descriptive and concise. E.g., 'Foundation', 'Core Features', 'Sync Protocol'. Used as reference in context entries and conversations."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "What this phase delivers and why it comes at this point in the sequence.",
+          "$comment": "Include the business value and the technical rationale for ordering. A stakeholder should understand why this phase matters."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_started", "active", "completed", "blocked"],
+          "description": "Current phase status.",
+          "$comment": "not_started: waiting for dependencies. active: at least one milestone in progress (only ONE phase active at a time). completed: all milestones done. blocked: waiting on external dependency outside project control."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "description": "IDs of phases that must be 'completed' before this phase can start.",
+          "$comment": "Empty array means no dependencies — phase can start when previous phases by order allow. Use this for non-sequential dependencies (e.g., phase 4 depends on phase 1 but not 2 or 3)."
+        },
+        "milestones": {
+          "type": "array",
+          "description": "Verifiable milestones within this phase.",
+          "$comment": "Milestones within a phase can be worked in parallel. Each milestone can spawn one or more logbooks via logbook_ref. When all milestones are 'completed', mark the phase as 'completed'.",
+          "items": {
+            "$ref": "#/$defs/milestone"
+          }
+        }
+      },
+      "required": ["id", "name", "description", "status", "depends_on", "milestones"]
+    },
+
+    "milestone": {
+      "type": "object",
+      "description": "A verifiable milestone within a phase. Can spawn individual logbooks for detailed execution.",
+      "$comment": "Milestones are the bridge between roadmap (strategic) and logbooks (tactical). Keep content as a verifiable outcome statement. When a logbook is created for this milestone, set logbook_ref to the filename.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "description": "Hierarchical ID in format 'phaseId.sequentialNumber'.",
+          "$comment": "Format: 'N.M' where N is the phase ID and M is sequential within the phase. E.g., '1.1', '1.2', '2.1'. Never reuse."
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 180,
+          "description": "Verifiable outcome statement. When this is true, the milestone is done.",
+          "$comment": "Write as outcome, not task. Validate: Can you answer 'Is this done?' with yes/no? If not, rewrite. This becomes the seed for the spawned logbook's ticket.description."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_started", "active", "completed", "blocked"],
+          "description": "Current milestone status.",
+          "$comment": "Track independently from phase status. A milestone is 'completed' when its outcome statement is verified true — either by code inspection (if logbook exists) or by owner confirmation."
+        },
+        "logbook_ref": {
+          "type": ["string", "null"],
+          "description": "Filename of the spawned logbook that implements this milestone.",
+          "$comment": "Null until a logbook is created via logbook-create command. Set to filename (e.g., 'logbook_auth_system.json') when the logbook is created. One milestone can reference one logbook. If a milestone needs multiple logbooks, split into multiple milestones."
+        }
+      },
+      "required": ["id", "content", "status"]
+    },
+
+    "decision": {
+      "type": "object",
+      "description": "A product-level decision with context. Once here, it stands unless explicitly revised.",
+      "$comment": "Record every significant decision: architecture choices, scope changes, technology selections, feature cuts, role definitions. Include enough context that a future reader understands WHY without asking.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique decision identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the decision was made.",
+          "$comment": "Set once. Immutable."
+        },
+        "decision": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What was decided.",
+          "$comment": "Clear, unambiguous statement. E.g., 'Use Firebase Auth with custom claims for role management' not 'We might use Firebase'."
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Why this was decided and what alternatives were considered.",
+          "$comment": "Include: the trigger (what forced the decision), alternatives evaluated, and why this option won. Prevents future re-discussion."
+        },
+        "impact": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "How much this decision affects the product direction.",
+          "$comment": "high: changes architecture, scope, or user experience fundamentally. medium: affects a phase or feature significantly. low: implementation detail with limited blast radius."
+        }
+      },
+      "required": ["id", "created_at", "decision", "context", "impact"]
+    },
+
+    "open_question": {
+      "type": "object",
+      "description": "A question that cannot be answered yet.",
+      "$comment": "When resolved: set status to 'resolved', fill resolution, and if the answer was a decision, also add a decision entry. Do not delete — keep for audit trail.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique question identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the question was raised.",
+          "$comment": "Set once. Immutable."
+        },
+        "question": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "The question we cannot answer yet.",
+          "$comment": "Be specific. Bad: 'What about auth?' Good: 'Should client role have read access to logbook recommendations field?'"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "resolved"],
+          "description": "Whether the question has been answered.",
+          "$comment": "Set to 'resolved' only when a definitive answer exists. If the answer is a decision, also create a decision entry."
+        },
+        "resolution": {
+          "type": ["string", "null"],
+          "maxLength": 300,
+          "description": "How the question was resolved. Null while open.",
+          "$comment": "Fill when status changes to 'resolved'. Include who decided and why."
+        }
+      },
+      "required": ["id", "created_at", "question", "status"]
+    },
+
+    "context_entry": {
+      "type": "object",
+      "description": "Single context entry representing a product-level interaction, finding, or decision.",
+      "$comment": "Same structure as logbook_software_schema.recent_context items. Use for product-level context only — ticket-level progress belongs in individual logbooks.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier. Immutable once created.",
+          "$comment": "Start at 1, increment by 1 globally across all entries. Never reuse IDs."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when entry was created. Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 1200,
+          "description": "Entry content describing product-level action, decision, finding, or progress.",
+          "$comment": "Write concisely but completely. Include: what happened, why it matters, any decisions made. Future agents use this to understand product context."
+        }
+      },
+      "required": ["id", "created_at", "content"]
+    },
+
+    "history_entry": {
+      "type": "object",
+      "description": "Compressed summary of a removed recent_context entry.",
+      "$comment": "Same structure as logbook_software_schema.history_summary items. Max 140 chars. Capture essential information only.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier. Immutable.",
+          "$comment": "Separate sequence from recent_context IDs. Start at 1, increment by 1."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this summary was created.",
+          "$comment": "Set once. Immutable."
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Compressed summary.",
+          "$comment": "Tweet-length. Focus on: what was done, outcome, or key decision."
+        }
+      },
+      "required": ["id", "created_at", "content"]
+    },
+
+    "reminder": {
+      "type": "object",
+      "description": "A scheduled reminder for a future session.",
+      "$comment": "Same structure as logbook_software_schema.future_reminders items. Only add on explicit user request. Surface when current time >= when.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When reminder was created.",
+          "$comment": "Set once. Immutable."
+        },
+        "content": {
+          "type": "string",
+          "description": "Reminder message to surface.",
+          "$comment": "Write exactly what user wants to be reminded about. Include context needed."
+        },
+        "when": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When to surface this reminder.",
+          "$comment": "Compare against current time at session start. Surface if current time >= when."
+        }
+      },
+      "required": ["id", "created_at", "content", "when"]
+    }
+  }
+}

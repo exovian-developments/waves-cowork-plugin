@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Logbook Schema",
+  "description": "Schema for tracking development context across sessions. Supports long-term memory, objective tracking with actionable guidance, and progress documentation. Designed for continuity across multiple LLMs and sessions.",
+  "type": "object",
+  "properties": {
+    "ticket": {
+      "type": "object",
+      "description": "Metadata of the ticket or task that anchors this logbook. This is the ultimate goal that all objectives contribute to.",
+      "$comment": "Populate from user input or external system. If no ticket URL exists, leave url empty. Title and description are required to create the logbook.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Title of the ticket or task. Should be concise and descriptive.",
+          "$comment": "Copy from ticket system or ask user. Keep under 100 characters."
+        },
+        "url": {
+          "type": "string",
+          "description": "Direct URL to the ticket or task in an external system (Jira, GitHub, etc.).",
+          "$comment": "Optional. Leave empty string if no external system. Do not invent URLs."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation and context provided in the ticket. Includes acceptance criteria if available.",
+          "$comment": "Copy from ticket or ask user to explain. Include all relevant details: requirements, constraints, acceptance criteria."
+        }
+      },
+      "required": ["title", "description"]
+    },
+
+    "objectives": {
+      "type": "object",
+      "description": "Project objectives organized by priority. Main objectives define high-level deliverables with scope. Secondary objectives are actionable steps with specific completion guidance.",
+      "$comment": "Both main and secondary arrays can be populated in the same operation. Secondary objectives should have completion_guide based on code analysis using main objectives' scope.files as reference points.",
+      "properties": {
+        "main": {
+          "type": "array",
+          "description": "Primary objectives that define major deliverables. Each provides context, reference files, and applicable rules.",
+          "$comment": "Use project_manifest.json to identify related layers and features. Each main objective needs: verifiable content, business context, scope with reference files, and applicable rules from project_rules.json.",
+          "items": {
+            "$ref": "#/$defs/main_objective"
+          }
+        },
+        "secondary": {
+          "type": "array",
+          "description": "Actionable objectives derived from analysis of main objectives. Each contains specific guidance for implementation.",
+          "$comment": "Base completion_guide on code inspection starting from main objectives' scope.files. Apply scope.rules when writing guidance. All secondary objectives contribute to ticket completion.",
+          "items": {
+            "$ref": "#/$defs/secondary_objective"
+          }
+        }
+      },
+      "required": ["main", "secondary"]
+    },
+
+    "recent_context": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Running log of recent interactions, findings, decisions, and progress. Newest entries at index 0. Sliding window that compacts to history_summary when full.",
+      "$comment": "Prepend new entries at index 0. When array exceeds maxItems, remove last (oldest) entry and summarize it to history_summary. Never replace entire array.",
+      "items": {
+        "type": "object",
+        "description": "Single context entry representing a meaningful interaction, finding, or decision.",
+        "$comment": "Create entry for: progress updates, important findings, decisions made, blockers encountered, user instructions. Keep content focused and actionable.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unique identifier for this entry. Immutable once created.",
+            "$comment": "Start at 1, increment by 1 globally across all entries. Never reuse IDs."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when entry was created (ISO 8601). Immutable.",
+            "$comment": "Set once at creation. Never modify."
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1200,
+            "description": "Entry content describing action, decision, finding, or progress. Should be meaningful and provide context for future sessions.",
+            "$comment": "Write concisely but completely. Include: what happened, why it matters, any decisions made. Future agents will use this to understand context."
+          },
+          "mood": {
+            "type": "string",
+            "description": "User's emotional state during this entry if observable (focused, frustrated, excited, uncertain).",
+            "$comment": "Optional. Only populate if user mood is clearly observable. Helps future agents adjust communication style."
+          }
+        },
+        "required": ["id", "created_at", "content"]
+      }
+    },
+
+    "history_summary": {
+      "type": "array",
+      "maxItems": 10,
+      "description": "Compact summaries of entries removed from recent_context. Preserves continuity when short-term memory is full. Newest at index 0.",
+      "$comment": "Write here ONLY when truncating recent_context. Summarize removed entry in max 140 chars. Prepend at index 0. If exceeds maxItems, remove oldest (last) entry.",
+      "items": {
+        "type": "object",
+        "description": "Compressed summary of a removed recent_context entry.",
+        "$comment": "Capture essential information only: what was done, key decision, or important finding.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unique identifier for this summary. Immutable once created.",
+            "$comment": "Start at 1, increment by 1. Separate sequence from recent_context IDs."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when summary was created (ISO 8601). Immutable.",
+            "$comment": "Set once at creation. Never modify."
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 140,
+            "description": "Compressed summary of removed entry. Must capture essential information.",
+            "$comment": "Summarize in tweet-length. Focus on: what was done, outcome, or key decision. Omit details recoverable from code."
+          },
+          "mood": {
+            "type": "string",
+            "description": "User's emotional state at time of original entry if it was recorded.",
+            "$comment": "Optional. Preserve from original entry if present."
+          }
+        },
+        "required": ["id", "created_at", "content"]
+      }
+    },
+
+    "future_reminders": {
+      "type": "array",
+      "description": "User-created reminders for future sessions. Agent surfaces these when their time arrives.",
+      "$comment": "Only add reminders when user explicitly requests. Check this array at session start and surface any due reminders.",
+      "items": {
+        "type": "object",
+        "description": "A scheduled reminder to surface in a future session.",
+        "$comment": "Create only on explicit user request. Remove after surfacing to user.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unique identifier for this reminder. Immutable once created.",
+            "$comment": "Start at 1, increment by 1. Never reuse IDs."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when reminder was created (ISO 8601). Immutable.",
+            "$comment": "Set once at creation. Never modify."
+          },
+          "content": {
+            "type": "string",
+            "description": "Reminder message to surface to user when due.",
+            "$comment": "Write exactly what user wants to be reminded about. Include any context needed."
+          },
+          "when": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when this reminder should be surfaced to user.",
+            "$comment": "Compare against current time at session start. Surface if current time >= when."
+          }
+        },
+        "required": ["id", "created_at", "content", "when"]
+      }
+    }
+  },
+
+  "recommendations": {
+      "type": "array",
+      "description": "Recommendations discovered during implementation. These are improvements or follow-ups that aren't blocking but should be considered.",
+      "$comment": "Populated by objectives-implement command when code-implementer finds opportunities for improvement. Review periodically.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Unique identifier for this recommendation."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when recommendation was created."
+          },
+          "from_objective": {
+            "type": "string",
+            "description": "ID of the objective that generated this recommendation (e.g., '1.1')."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["refactor", "security", "performance", "documentation", "testing", "technical_debt"],
+            "description": "Category of the recommendation."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Detailed description of the recommendation."
+          },
+          "affected_files": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Files that would be affected by implementing this recommendation."
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Priority level for addressing this recommendation."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "accepted", "declined", "implemented"],
+            "description": "Current status of the recommendation."
+          }
+        },
+        "required": ["id", "created_at", "type", "description", "priority", "status"]
+      }
+    }
+  },
+
+  "required": ["ticket", "objectives", "recent_context", "history_summary", "future_reminders"],
+
+  "$defs": {
+    "main_objective": {
+      "type": "object",
+      "description": "High-level objective defining a major deliverable. Provides business context, reference files as starting points for code tracing, and applicable project rules.",
+      "$comment": "Use project_manifest.json to identify related layers and features. Populate scope.files with entry points for code analysis. Populate scope.rules with applicable rule IDs from project_rules.json (empty array if no rules exist).",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier for this main objective. Immutable once created.",
+          "$comment": "Start at 1, increment by 1. Never reuse IDs even after abandonment."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when objective was created (ISO 8601). Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 180,
+          "description": "Verifiable outcome statement that serves as acceptance criteria. When this statement is true, the objective is achieved.",
+          "$comment": "Write as outcome, not task. Validate: Can you answer 'Is this done?' with yes/no by inspecting code? If not, rewrite."
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Business or technical rationale: who needs this, what problem it solves, relevant constraints or dependencies.",
+          "$comment": "Include information that helps make implementation decisions. Reference stakeholders, dependencies, or deadlines if relevant."
+        },
+        "scope": {
+          "type": "object",
+          "description": "Implementation boundaries: starting point files for code tracing and project rules that constrain the solution.",
+          "$comment": "Files are entry points for deeper analysis, not exhaustive lists. Rules guide implementation approach.",
+          "properties": {
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 150
+              },
+              "description": "Reference files identified during initial analysis. Entry points for deeper code tracing.",
+              "$comment": "Use relative paths from project root. Append '(new)' for files to create. Example: 'src/dtos/ProductDTO.ts (new)'."
+            },
+            "rules": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "description": "IDs from project_rules.json that apply to this objective's scope. Empty array if project has no rules defined.",
+              "$comment": "Reference rules by ID. Apply these rules when implementing. If no rules exist, use the most common best practices for the framework and language always applying YAGNI principle."
+            }
+          },
+          "required": ["files"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_started", "active", "blocked", "achieved", "abandoned"],
+          "description": "Current state: not_started (pending work), active (in progress), blocked (waiting on external input), achieved (completed), abandoned (cancelled).",
+          "$comment": "Set only ONE main objective as 'active' at a time. Use 'blocked' when waiting for user input or external dependency. Set 'achieved' when content statement is verified true."
+        }
+      },
+      "required": ["id", "created_at", "content", "context", "scope", "status"]
+    },
+
+    "secondary_objective": {
+      "type": "object",
+      "description": "Actionable objective derived from code analysis. Contains specific implementation guidance based on actual code inspection.",
+      "$comment": "Base completion_guide on code inspection using main objectives' scope.files as starting points. Reference specific files, patterns, and applicable rules in the guide.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier across all secondary objectives. Immutable once created.",
+          "$comment": "Start at 1, increment globally across all secondary objectives. Never reuse IDs."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when objective was created (ISO 8601). Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 180,
+          "description": "Specific verifiable outcome that contributes to ticket completion. Should be completable in a focused work session.",
+          "$comment": "Be granular. Validate: Can this be completed and verified in one session? If not, split into multiple objectives."
+        },
+        "completion_guide": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": "Step-by-step implementation guidance based on code analysis. References specific files, patterns, line numbers, and applicable rules + YAGNI principle applied to the design.",
+          "$comment": "Each item must reference actual code or rules. Format: 'Use pattern from src/file.ts:45' or 'Apply rule #7: description'. No generic advice. When creating each item always apply the YAGNI principle."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_started", "active", "blocked", "achieved", "abandoned"],
+          "description": "Current state: not_started (pending work), active (in progress), blocked (waiting on external input), achieved (completed), abandoned (cancelled).",
+          "$comment": "Set only ONE secondary objective as 'active' at a time. Work sequentially. Set 'achieved' after verifying content statement is true in codebase."
+        }
+      },
+      "required": ["id", "created_at", "content", "completion_guide", "status"]
+    }
+  }
+}

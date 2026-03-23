@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Project Manifest Schema",
+  "type": "object",
+  "$comment": "This file describes a software project in a structured format. When a LLM is working to populate this manifest, it should aim to fulfill the semantic purpose of each section and value—not just to provide data, but to convey meaning and intent accurately.",
+  "additionalProperties": false,
+  "required": ["project", "platform_info", "technical_details", "features"],
+
+  "properties": {
+    "project": {
+      "type": "object",
+      "description": "Basic identity and timeline of the project.",
+      "required": ["name", "description", "creation_date", "last_updated"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Project or repository name.",
+          "$comment": "Exact name of the project or repository. Should match the root directory or Git name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "High-level business description of the project.",
+          "$comment": "Business-level description. What does the app do? Who is it for? What problems does it solve? Avoid technical jargon."
+        },
+        "creation_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date when the project was initially created (YYYY-MM-DD).",
+          "$comment": "Date the project was initially created or scaffolded. If unknown, use best estimate."
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of the last meaningful change (YYYY-MM-DD).",
+          "$comment": "Date of the last meaningful change to source code or dependencies. LLMs should use commit history or version bumps."
+        }
+      },
+      "$comment": "Basic identity and timeline of the project. Do not include technical architecture or libraries here."
+    },
+
+    "platform_info": {
+      "type": "object",
+      "description": "Language, framework and environment information.",
+      "additionalProperties": false,
+      "required": ["language", "language_version", "framework", "framework_version", "build_system"],
+      "properties": {
+        "language": {
+          "type": "string",
+          "description": "Primary programming language.",
+          "$comment": "Main programming language used in the project (e.g., Kotlin, Dart, JavaScript). LLMs: look at primary source files."
+        },
+        "language_version": {
+          "type": "string",
+          "description": "Version of the programming language.",
+          "$comment": "Language version explicitly declared in config or inferred from syntax. For Kotlin, check build.gradle.kts. For Dart, use pubspec.yaml."
+        },
+        "framework": {
+          "type": "string",
+          "description": "Core development framework or 'none'.",
+          "$comment": "Core development framework, if any (e.g., Jetpack Compose, Flutter, React). If none applies, use 'none'."
+        },
+        "framework_version": {
+          "type": "string",
+          "description": "Version of the framework.",
+          "$comment": "Version of the framework from dependency declaration (e.g., Flutter 3.22.1, Compose 1.6.7). Use 'unknown' if undetectable."
+        },
+        "build_system": {
+          "type": "string",
+          "description": "Build system name and version.",
+          "$comment": "Name and version of build system (e.g., Gradle 8.5, Bazel, npm). LLMs: look for build config files at project root."
+        }
+      },
+      "$comment": "Describes the language, framework, and environment used to build the project. Essential for compatibility and lifecycle audits."
+    },
+
+    "technical_details": {
+      "type": "object",
+      "description": "Core technical layout and architecture.",
+      "required": ["is_modular_project", "architecture_identified"],
+      "minProperties": 2,
+      "properties": {
+        "is_modular_project": {
+          "type": "boolean",
+          "description": "Whether the project is organized into independent buildable modules.",
+          "$comment": "True if the project is organized into independently compiled modules (e.g., Gradle subprojects, Flutter packages). Folder separation alone is NOT sufficient. LLMs: check for separate build files, module directories, and cross-module dependencies."
+        },
+
+        "modules": {
+          "type": "array",
+          "description": "List of buildable or logical modules.",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Module short identifier.",
+                "$comment": "Short identifier for the module (e.g., 'auth', 'chat_ui'). Prefer lowercase underscore style."
+              },
+              "description": {
+                "type": "string",
+                "description": "Brief technical purpose of the module.",
+                "$comment": "Brief technical purpose of this module (e.g., 'Handles user authentication and session logic')."
+              },
+              "depends_on": {
+                "type": "array",
+                "description": "Module names this one depends on.",
+                "items": { "type": "string" },
+                "default": [],
+                "$comment": "List of other module names this one depends on. Order does not matter."
+              }
+            }
+          },
+          "default": [],
+          "$comment": "List of buildable or logical modules. Only populate if is_modular_project is true. For non-modular project or monoliths, leave empty. The folder separation should be reflected in the architecture_identified object"
+        },
+
+        "architecture_identified": {
+          "type": "array",
+          "description": "Observed architecture patterns by layer.",
+          "items": {
+            "type": "object",
+            "required": ["layer", "pattern"],
+            "properties": {
+              "layer": {
+                "type": "string",
+                "description": "Logical layer name (e.g., presentation, domain, data).",
+                "$comment": "Logical layer name: 'presentation', 'domain', 'data', 'infrastructure', etc. If custom, describe meaning in common_technologies."
+              },
+              "pattern": {
+                "type": "string",
+                "description": "Architecture pattern used in the layer (e.g., MVVM, Clean).",
+                "$comment": "Architecture pattern used in the layer (e.g., MVVM, MVP, Clean, Redux, Hexagonal). If multiple coexist, list all applicable entries."
+              },
+              "common_technologies": {
+                "type": "array",
+                "description": "Libraries or concepts commonly used in the layer.",
+                "items": { "type": "string" },
+                "default": [],
+                "$comment": "Libraries, classes or conventions observed in this layer (e.g., ViewModel, StateFlow, UseCase, DAO)."
+              }
+            }
+          },
+          "default": [],
+          "$comment": "Describes distinct architecture patterns observed per layer. AI agents must infer this from code organization, naming, imports and folder structure; do your best without overengineering."
+        }
+      },
+      "$comment": "Core technical layout of the project. This section is used for structural audits and onboarding summaries."
+    },
+
+    "features": {
+      "type": "array",
+      "description": "Main end-user features of the project.",
+      "items": { "type": "string" },
+      "default": [],
+      "minItems": 1,
+      "$comment": "List of main features visible to end users (e.g., 'offline support', 'biometric login'). LLMs should look at main screens, routes and menus. Be very concise describing the features."
+    },
+
+    "llm_notes": {
+      "type": "object",
+      "description": "Computed notes and recommendations by the LLM.",
+      "required": ["is_up_to_date"],
+      "properties": {
+        "is_up_to_date": {
+          "type": "boolean",
+          "description": "Whether the core tech stack is up to date.",
+          "$comment": "Set to true if core tech stack is still maintained and has no major deprecation risks. Otherwise false."
+        },
+        "recommended_actions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Concise suggestions for updates or future-proofing.",
+          "$comment": "Suggestions for updating or future-proofing the project (e.g., 'Migrate to Kotlin 2.0 coroutines')."
+        }
+      },
+      "default": {},
+      "$comment": "This is a computed section. It may be generated during audits, code reviews or LLM analysis of platform_info."
+    }
+  }
+}

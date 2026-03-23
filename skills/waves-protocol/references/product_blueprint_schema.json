@@ -1,0 +1,700 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Product Blueprint Schema",
+  "description": "Complete product definition document. Answers WHAT the product is and WHY it exists. Sits above logbook_roadmap (WHEN/ORDER) and individual logbooks (HOW) in the artifact hierarchy: blueprint → roadmap → logbook.",
+  "$comment": "One per product. Definitive source of truth for product identity, capabilities, flows, rules, and decisions. The roadmap extracts its vision section from this document. Work section by section with the product owner — do not fill sections speculatively. Every section must be validated by the owner before proceeding. When blueprint_type is 'autonomous_entity', the autonomous_entity_identity section is required. The two .md reference schemas (product_blueprint_schema.md for standard, product_blueprint_autonomous_entity_schema.md for entity products) are preserved as documentation — this JSON schema formalizes and unifies both.",
+  "type": "object",
+  "properties": {
+    "meta": {
+      "type": "object",
+      "description": "Blueprint metadata and product identity.",
+      "$comment": "Set at creation. Update last_updated on every write. blueprint_type determines whether autonomous_entity_identity is expected.",
+      "properties": {
+        "product_name": {
+          "type": "string",
+          "description": "Official product name.",
+          "$comment": "Public-facing name. Must match product.name in the corresponding logbook_roadmap if one exists. Use consistently across all references."
+        },
+        "product_codename": {
+          "type": "string",
+          "description": "Internal codename if different from public name.",
+          "$comment": "Optional. Useful when the product has an internal working name."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Product owner — person who validates every section and makes final decisions.",
+          "$comment": "Name or identifier. This person must approve all content in this blueprint. Do not fill sections without their input or explicit delegation."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when this blueprint was created. Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp of last modification.",
+          "$comment": "Update on every write operation to this file."
+        },
+        "blueprint_type": {
+          "type": "string",
+          "enum": ["standard", "autonomous_entity"],
+          "description": "Blueprint variant.",
+          "$comment": "standard: product without a central AI entity (most products). autonomous_entity: product where an AI entity with its own identity is central to the user experience (e.g., AI coaches, conversational agents, autonomous companions). When 'autonomous_entity', the autonomous_entity_identity section is required."
+        }
+      },
+      "required": ["product_name", "owner", "created_at", "last_updated", "blueprint_type"]
+    },
+
+    "problem": {
+      "type": "object",
+      "description": "The problem this product solves, decomposed into three dimensions.",
+      "$comment": "Work with the product owner to answer each dimension as a separate paragraph. If the owner cannot clearly articulate all three, the product definition is not ready — do not proceed to other sections until this is solid. These three paragraphs are the foundation of everything that follows.",
+      "properties": {
+        "pain": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "What pain exists? The specific suffering users experience.",
+          "$comment": "Ask the owner: 'What hurts?' Describe the concrete, observable problem. Not abstract industry trends — real pain felt by real people. A reader should feel the problem after reading this paragraph."
+        },
+        "reality": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Why is this pain real? Evidence that the problem is genuine and significant.",
+          "$comment": "Ask: 'Why is this real?' Provide evidence: frequency, impact, who suffers, how many. This validates the problem beyond anecdote. If there is no evidence, challenge whether the problem is real."
+        },
+        "unsolved": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Why hasn't this been solved? What exists and why does it fall short?",
+          "$comment": "Ask: 'Why is this not solved yet?' Identify existing alternatives and why they fail. If existing solutions work well, there may be no product here. This validates the opportunity."
+        }
+      },
+      "required": ["pain", "reality", "unsolved"]
+    },
+
+    "target_users": {
+      "type": "array",
+      "description": "Concrete subjects who benefit directly from the product.",
+      "$comment": "One entry per distinct user type. Each must describe a REAL person with REAL problems — not market segments, not demographics, not personas with invented names. Write as if pointing at someone: 'That person, with that problem'. Each description must connect back to the problem section. If you cannot describe a real person, the target is too abstract.",
+      "items": {
+        "$ref": "#/$defs/target_user"
+      },
+      "minItems": 1
+    },
+
+    "product_hypothesis": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "Concise affirmative statement of what the product will solve.",
+      "$comment": "One sentence. Format: '[Product] will [solve X] by [doing Y]'. This is a hypothesis — it may be wrong. The success_metrics section defines how to validate it. If you cannot state the hypothesis in one sentence, the product concept is too diffuse — go back to the problem section."
+    },
+
+    "mission": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "What this product does for its users day-to-day. Operational, not aspirational.",
+      "$comment": "Answer: 'What does this product do for people every day?' This is NOT the vision (the big dream) — this is the daily commitment. Format: 'With [product], users [specific daily action/benefit]'. If it sounds like a corporate mission statement, rewrite — it should sound like a product description a user would recognize."
+    },
+
+    "vision": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "What the product achieves when fully realized.",
+      "$comment": "Answer: 'What will this product do when it is finished?' This IS aspirational — the end state, the world the product creates. Unlike mission (daily operation), vision is the destination. Keep concise."
+    },
+
+    "out_of_scope": {
+      "type": "array",
+      "description": "What the product explicitly does NOT do. Each exclusion protects the scope and roadmap.",
+      "$comment": "Each exclusion must hurt a little. If excluding something does not hurt, it is not a real boundary — it is something obviously unrelated. These exclusions prevent scope creep and protect the roadmap. When someone asks 'can the product do X?', check this list first. If X is here, the answer is no, by design.",
+      "items": {
+        "$ref": "#/$defs/scope_exclusion"
+      }
+    },
+
+    "design_principles": {
+      "type": "array",
+      "description": "Guiding premises established by the product owner. Principles generate rules.",
+      "$comment": "A principle is the WHY behind rules. The relationship: principle explains WHY a rule exists, the rule (in product_rules) defines WHAT specifically happens. Each principle should generate at least one product_rule — if it generates none, it is aspirational noise and should be removed. To explain any rule, read its originating principle. Include inline rule previews to show the principle's practical impact at a glance.",
+      "items": {
+        "$ref": "#/$defs/design_principle"
+      }
+    },
+
+    "essential_capabilities": {
+      "type": "array",
+      "description": "Minimum critical capabilities without which the product cannot exist.",
+      "$comment": "Format: 'The user can [specific action]'. A capability is NOT a button, NOT an endpoint, NOT a technical implementation detail. It is what the product LETS the user DO. Test: without this capability, the product cannot operate, the problem is not solved, the hypothesis fails, the vision is unreachable. Order by dependency: independent capabilities first, dependent capabilities after. If a capability has dependencies within this list, use depends_on to declare them. Keep language natural — no technical specifications here.",
+      "items": {
+        "$ref": "#/$defs/capability"
+      }
+    },
+
+    "non_essential_capabilities": {
+      "type": "object",
+      "description": "Capabilities that strengthen the product but are not critical for it to exist.",
+      "$comment": "Split into two tiers. 'important': hurts to operate without, significantly strengthens essential capabilities, but the product still works. 'desired': nice to have, improves experience, no operational pain without it. If everything ends up in 'important', revisit — you may be smuggling essential capabilities. These are the first candidates for scope trimming when needed.",
+      "properties": {
+        "important": {
+          "type": "array",
+          "description": "Capabilities that significantly strengthen essential capabilities.",
+          "$comment": "Test: does it hurt to operate without this? If yes, it belongs here. If the product BREAKS without it, move it to essential_capabilities.",
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
+        },
+        "desired": {
+          "type": "array",
+          "description": "Everything else that improves the product.",
+          "$comment": "Nice-to-haves. The product works fine without these. First to cut when scope needs trimming.",
+          "items": {
+            "$ref": "#/$defs/capability"
+          }
+        }
+      },
+      "required": ["important", "desired"]
+    },
+
+    "autonomous_entity_identity": {
+      "type": "object",
+      "description": "Identity definition for products with an autonomous AI entity at their core.",
+      "$comment": "REQUIRED when meta.blueprint_type is 'autonomous_entity'. OMIT entirely for 'standard' blueprints. The entity is NOT a chatbot nor a conventional assistant — it is an entity with its own identity operating within defined boundaries. The product owner defines the framework; the entity operates autonomously within it. The owner does NOT control every word or interaction — only the boundaries.",
+      "properties": {
+        "identity": {
+          "type": "string",
+          "description": "Who the entity is: self-presentation, personality, foundational discourse.",
+          "$comment": "Define: name, how it introduces itself, core personality traits, and the foundational statement that encapsulates its essence and relationship with users. This is the entity's DNA — voice, modes, and limits all derive from this. Write as if the entity is introducing itself for the first time."
+        },
+        "voice": {
+          "type": "string",
+          "description": "How the entity communicates: tone, style, what it says and never says.",
+          "$comment": "Define: default tone, how tone varies by context (celebration vs confrontation vs vulnerability), specific phrases it uses, phrases it NEVER uses. Be specific — 'warm and empathetic' is too vague. Instead: 'Uses direct questions, avoids platitudes, acknowledges difficulty before suggesting action'. Include examples of how voice changes by situation."
+        },
+        "operation_modes": {
+          "type": "string",
+          "description": "How behavior varies by context: modes, intensity levels, mode transition triggers.",
+          "$comment": "Define distinct behavioral modes (e.g., 'coaching mode', 'listening mode', 'alert mode') and what triggers transitions between them. Each mode should have clear behavioral differences the user can perceive. Describe: what the entity does differently in each mode and what causes a switch."
+        },
+        "operational_limits": {
+          "type": "string",
+          "description": "What the entity can do autonomously vs where it needs explicit rules. What it must NEVER do.",
+          "$comment": "Define the autonomy boundary clearly. Structure as: 'Can do without asking: [list]'. 'Needs rules for: [list]'. 'Must NEVER: [list]'. The NEVER list is the most critical — these are hard guardrails that cannot be overridden by context, user request, or any other condition."
+        },
+        "relationship_evolution": {
+          "type": "string",
+          "description": "How the entity-user relationship changes over time.",
+          "$comment": "Define phases: first contact (how it introduces itself), early usage (building trust), sustained use (deepening relationship), long absence (re-engagement). The entity should feel different at month 1 vs month 6. Describe concrete behavioral changes across these phases."
+        }
+      },
+      "required": ["identity", "voice", "operation_modes", "operational_limits", "relationship_evolution"]
+    },
+
+    "essential_flows_and_views": {
+      "type": "object",
+      "description": "Critical user flows, views, and system flows. Without these, the product cannot function.",
+      "$comment": "ONLY 'success' or 'happy path' states. No error flows, no empty states, no loading states — those go in secondary_flows_and_views. These are the flows and views WITHOUT which the product does not exist, the problem is not solved, and the vision is unreachable. Include references to wireframes or visual guides when available.",
+      "properties": {
+        "user_flows": {
+          "type": "array",
+          "description": "User-facing happy path flows.",
+          "$comment": "Each flow: how the user goes from point A to point B. Only success paths. Entry point must be unambiguous. Termination must be a clear end state.",
+          "items": { "$ref": "#/$defs/user_flow" }
+        },
+        "views": {
+          "type": "array",
+          "description": "Essential views in their success state with data populated.",
+          "$comment": "No empty states, no loading states, no error states. Only views showing the ideal state with real data. Describe what the user sees and what actions are available from this view.",
+          "items": { "$ref": "#/$defs/view" }
+        },
+        "system_flows": {
+          "type": "array",
+          "description": "Backend or internal processes invisible to the user but essential for operation.",
+          "$comment": "Each flow: what event triggers it and what result it produces. Without these system flows, essential capabilities cannot work. The user never sees these but depends on them entirely.",
+          "items": { "$ref": "#/$defs/system_flow" }
+        }
+      },
+      "required": ["user_flows", "views", "system_flows"]
+    },
+
+    "secondary_flows_and_views": {
+      "type": "object",
+      "description": "Non-essential flows and views: alternative paths, error handling, edge cases.",
+      "$comment": "Everything NOT in essential: error flows, alternative success paths, empty states, edge cases, error recovery. These strengthen the product but it can launch (minimally) without them. Include the specific scenario and trigger for each alternative path.",
+      "properties": {
+        "user_flows": {
+          "type": "array",
+          "description": "Alternative, error, and edge-case user flows.",
+          "$comment": "Includes: alternative success paths, error recovery flows, edge cases. Document what triggers each alternative path and how the user recovers or proceeds.",
+          "items": { "$ref": "#/$defs/user_flow" }
+        },
+        "views": {
+          "type": "array",
+          "description": "Secondary views: error states, empty states, alternative layouts.",
+          "$comment": "Use the state field to indicate the variation: error, empty, alternative, loading. These complete the UX but the product can launch without them if needed.",
+          "items": { "$ref": "#/$defs/view" }
+        },
+        "system_flows": {
+          "type": "array",
+          "description": "Non-critical backend processes: error handling, cleanup, secondary operations.",
+          "$comment": "Includes: error recovery, data cleanup, non-critical integrations, background jobs. Important for robustness but the product functions without them initially.",
+          "items": { "$ref": "#/$defs/system_flow" }
+        }
+      },
+      "required": ["user_flows", "views", "system_flows"]
+    },
+
+    "product_rules": {
+      "type": "array",
+      "description": "Behavioral rules governing capabilities and flows. Each rule is a specific application of one or more design principles.",
+      "$comment": "Format: 'If [condition], then [behavior]' or 'When [context], [specific action]'. Each rule MUST reference which design_principle(s) generated it via principle_refs and which capability or flow it governs via applies_to. A rule without a principle reference is an orphan — either find its principle or question whether it is a real rule. Rules are the most granular level of product definition — they tell developers exactly what should happen in specific scenarios without ambiguity.",
+      "items": {
+        "$ref": "#/$defs/product_rule"
+      }
+    },
+
+    "success_metrics": {
+      "type": "array",
+      "description": "How we know the product is achieving its goals and when it is failing.",
+      "$comment": "Each metric must answer TWO questions: 'How do we know [this] works?' AND 'How do we know the system is failing and causing frustration?'. Both sides are required — optimistic-only metrics hide problems. These feed into the roadmap's vision.success_criteria (compressed). Align with product_hypothesis validation.",
+      "items": {
+        "$ref": "#/$defs/success_metric"
+      }
+    },
+
+    "tech_stack": {
+      "type": "string",
+      "description": "Technologies, platforms, integrations, and technical constraints that condition the build.",
+      "$comment": "Prose format. List: languages, frameworks, infrastructure, cloud services, third-party integrations, deployment targets (web, mobile, desktop), and any hard technical constraints. This section informs the roadmap's Foundation phase and all technical decisions. Keep factual — decisions and rationale go in product_decisions, not here."
+    },
+
+    "product_decisions": {
+      "type": "array",
+      "description": "Log of product decisions with full context. If a decision is not here, it was not made.",
+      "$comment": "This section grows the most over the product's life. Record EVERY significant decision: scope changes, capability additions or removals, rule changes, technology selections, UX choices, feature cuts. Include enough context that a future reader understands WHY without asking anyone. This prevents re-discussion of settled matters. Decisions here may also appear compressed in the roadmap's decisions array.",
+      "items": {
+        "$ref": "#/$defs/product_decision"
+      }
+    },
+
+    "open_questions": {
+      "type": "array",
+      "description": "Questions we cannot answer yet. When resolved, the answer becomes a decision, rule, or capability.",
+      "$comment": "Add questions discovered during blueprint creation, planning sessions, or development. Review at every session start. When resolved: set status to 'resolved', fill resolution, and create the corresponding entry (decision in product_decisions, rule in product_rules, or capability in the appropriate capabilities list). Do not delete resolved questions — keep for audit trail.",
+      "items": {
+        "$ref": "#/$defs/open_question"
+      }
+    },
+
+    "product_roadmaps": {
+      "type": "array",
+      "description": "Ordered list of roadmaps associated with this product. Most recent roadmap first (prepend-only).",
+      "$comment": "This array is the authoritative link between the blueprint and its roadmaps. It is managed EXCLUSIVELY by the roadmap-create command — never insert entries manually or from blueprint-create. New entries are always prepended (index 0), never appended. For new products or new blueprints, this array starts empty. Each entry contains the wave name and the relative path to the roadmap file within ai_files/. The roadmap files themselves contain logbook references that complete the traceability chain: blueprint → roadmap → logbook.",
+      "items": {
+        "$ref": "#/$defs/product_roadmap_ref"
+      },
+      "default": []
+    }
+  },
+
+  "required": [
+    "meta", "problem", "target_users", "product_hypothesis", "mission", "vision",
+    "out_of_scope", "design_principles", "essential_capabilities", "non_essential_capabilities",
+    "essential_flows_and_views", "secondary_flows_and_views", "product_rules",
+    "success_metrics", "tech_stack", "product_decisions", "open_questions"
+  ],
+
+  "$defs": {
+    "target_user": {
+      "type": "object",
+      "description": "A concrete person who benefits directly from the product.",
+      "$comment": "Describe a REAL person, not a market segment. Write as if pointing at someone in a room: 'That person, with that specific problem'. Include: who they are (role and context), what specific problem they face (connected to the problem section), and why current solutions fail them. One paragraph per user type. No demographics, no invented personas.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "One paragraph describing a concrete subject with a real problem.",
+          "$comment": "Must include: who they are (role/context), what specific problem they face (connected to the problem section), and why existing alternatives fail them. The reader should be able to visualize this person."
+        }
+      },
+      "required": ["id", "description"]
+    },
+
+    "scope_exclusion": {
+      "type": "object",
+      "description": "Something the product explicitly does NOT do.",
+      "$comment": "Each exclusion should hurt a little. If it does not hurt, it is not a real boundary. Format: '[What is excluded] — [why it is tempting but deliberately out of scope]'.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "statement": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "What is excluded and brief context on why.",
+          "$comment": "Write as: '[Specific thing excluded] — [why it is tempting to include but deliberately left out]'. The 'why' prevents future re-discussion of this exclusion."
+        }
+      },
+      "required": ["id", "statement"]
+    },
+
+    "design_principle": {
+      "type": "object",
+      "description": "A guiding premise established by the product owner that generates rules.",
+      "$comment": "A principle is the highest-level behavioral directive. Format: 'The system [must/should] [guiding premise]'. Each principle should generate at least one product_rule. The relationship: principle explains WHY, rule defines WHAT happens. To explain any rule, read its originating principle. Include rules_preview to show practical impact at a glance — full rules with references live in product_rules.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier. Referenced by product_rules[].principle_refs.",
+          "$comment": "Start at 1, increment by 1. Never reuse. This ID is used in product_rules to trace rules back to their originating principle."
+        },
+        "principle": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "The guiding premise.",
+          "$comment": "Must be specific enough to generate concrete rules. Bad: 'The product should be user-friendly'. Good: 'When the user is mid-calculation, the system must not interrupt with non-critical information'. If a principle is too vague to generate rules, it is not a principle — it is a wish."
+        },
+        "rules_preview": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 150 },
+          "description": "Brief preview of rules this principle generates.",
+          "$comment": "Optional. Quick reference showing the principle's practical impact. Full rules with capability and flow references live in product_rules. Format: short 'If X then Y' statements."
+        }
+      },
+      "required": ["id", "principle"]
+    },
+
+    "capability": {
+      "type": "object",
+      "description": "Something the product lets the user do.",
+      "$comment": "Format: 'The user can [specific action]'. NOT a button, NOT an endpoint, NOT a technical implementation. Test: complete 'With this product, the user can ___'. If the statement is too technical ('the system processes webhooks'), it is not a capability — it is an implementation detail. Be specific in responsibility and clear about what this capability does AND does not do.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier within this capabilities list.",
+          "$comment": "Start at 1, increment by 1. Never reuse. IDs are scoped per list: essential_capabilities, non_essential.important, and non_essential.desired each start their own sequence. Referenced by flows, rules, and metrics."
+        },
+        "capability": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "What the user can do.",
+          "$comment": "Natural language. Specific in responsibility, clear in boundaries. Include what this capability covers AND what it explicitly does not cover when the boundary is not obvious."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "description": "IDs of capabilities within the same list that must exist first.",
+          "$comment": "Optional. References capabilities in the same list only. If a capability has dependencies, they must appear before it in the array. Empty array or omitted means no dependencies. Non-essential capabilities implicitly depend on essential ones — no need to declare that cross-list dependency."
+        }
+      },
+      "required": ["id", "capability"]
+    },
+
+    "user_flow": {
+      "type": "object",
+      "description": "A user-facing flow from entry point to termination.",
+      "$comment": "For essential flows: ONLY happy path — success from start to finish. For secondary flows: includes alternative paths, error recovery, and edge cases. Each flow must have an unambiguous entry point and a clear termination state. Describe step by step how the user goes from A to B.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier within this flows array.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Short descriptive name for this flow.",
+          "$comment": "E.g., 'User registration', 'Calculate material cost', 'Error recovery: invalid input'."
+        },
+        "entry_point": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Where the flow starts.",
+          "$comment": "Must be unambiguous. E.g., 'User taps Calculate button on main screen'. A reader should know exactly where to start without asking."
+        },
+        "termination": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Where the flow ends.",
+          "$comment": "Must be a clear end state. E.g., 'System displays cost breakdown and user sees total'. The flow is complete when this state is reached."
+        },
+        "description": {
+          "type": "string",
+          "description": "Step-by-step description of the flow from entry to termination.",
+          "$comment": "Explain how the user navigates from entry_point to termination. For essential flows: only the success path. For secondary flows: describe the specific scenario (error type, alternative condition, edge case) and what triggers it. Include enough detail for a developer to implement without ambiguity."
+        },
+        "capability_refs": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "IDs of essential_capabilities this flow exercises.",
+          "$comment": "Optional. Helps trace flows back to the capabilities they implement. Reference essential_capabilities IDs."
+        },
+        "references": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "URLs or descriptions of wireframes, diagrams, or visual guides.",
+          "$comment": "Optional. Links to Figma, image URLs, or textual descriptions of wireframes. These are guides, not specifications — the flow description is the source of truth."
+        }
+      },
+      "required": ["id", "name", "entry_point", "termination", "description"]
+    },
+
+    "view": {
+      "type": "object",
+      "description": "A screen or visual state the user sees.",
+      "$comment": "For essential views: ONLY state 'success' — the ideal view with data populated. No empty, loading, or error states in essential. For secondary views: any state is valid (error, empty, alternative, loading). Describe what the user sees and what actions are available.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier within this views array.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "View name.",
+          "$comment": "E.g., 'Dashboard', 'Calculation result', 'Empty state: no projects'."
+        },
+        "state": {
+          "type": "string",
+          "enum": ["success", "empty", "error", "loading", "alternative"],
+          "description": "What state this view represents.",
+          "$comment": "For essential_flows_and_views.views: MUST be 'success'. For secondary_flows_and_views.views: any value is valid. success: ideal view with data. empty: no data available. error: something went wrong. loading: data is being fetched. alternative: valid but non-default variation."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the user sees in this view state.",
+          "$comment": "For success: describe the populated view — what data is shown, what actions are available. For empty: describe the empty state and calls to action. For error: describe what went wrong and recovery options. Be specific enough for a developer to build the UI."
+        },
+        "capability_refs": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "IDs of essential_capabilities this view serves.",
+          "$comment": "Optional. References essential_capabilities IDs."
+        },
+        "references": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "URLs or descriptions of wireframes or mockups.",
+          "$comment": "Optional. Visual guides for this view."
+        }
+      },
+      "required": ["id", "name", "state", "description"]
+    },
+
+    "system_flow": {
+      "type": "object",
+      "description": "A backend or internal process invisible to the user.",
+      "$comment": "System flows are operations the user never sees but depends on entirely. For essential: without this flow, essential capabilities cannot function. For secondary: important for robustness but the product can launch without them.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier within this system_flows array.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Short descriptive name.",
+          "$comment": "E.g., 'Store calculation result', 'Send confirmation email', 'Sync local artifacts'."
+        },
+        "trigger": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The event that starts this system flow.",
+          "$comment": "Must be specific. E.g., 'User submits calculation form', 'Timer reaches 24h since last sync', 'External webhook received from payment provider'."
+        },
+        "result": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What the system produces when the flow completes.",
+          "$comment": "The observable outcome. E.g., 'Record stored in database and confirmation email queued', 'Local and cloud artifacts synchronized with conflict report generated'."
+        },
+        "description": {
+          "type": "string",
+          "description": "How the system executes from trigger to result.",
+          "$comment": "Describe the internal process. Include key steps, data transformations, and integrations involved. Enough detail for a developer to implement the backend logic."
+        }
+      },
+      "required": ["id", "name", "trigger", "result", "description"]
+    },
+
+    "product_rule": {
+      "type": "object",
+      "description": "A specific behavioral rule governing a capability or flow.",
+      "$comment": "Rules are the most granular level of product definition. Format: 'If [condition], then [behavior]' or 'When [context], [action]'. Must be unambiguous — a developer implements this without asking for clarification. Every rule must trace back to at least one design_principle and reference which capability or flow it governs.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "rule": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "The behavioral rule.",
+          "$comment": "Format: 'If [condition], then [behavior]'. Must be specific and unambiguous. A developer should know exactly what to implement. Bad: 'Handle errors gracefully'. Good: 'If the calculation input contains a negative percentage, display an inline error message and prevent form submission'."
+        },
+        "principle_refs": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "description": "IDs of design_principles that generate this rule.",
+          "$comment": "At least one required. To understand WHY this rule exists, read the referenced principles. A rule with no principle reference is an orphan — either find its principle or question if it is a real rule."
+        },
+        "applies_to": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Which capability, flow, or view this rule governs.",
+          "$comment": "Reference by name or section and ID. E.g., 'Essential capability #3: Calculate material cost', 'User flow: User registration', 'View: Dashboard (success state)'. Be specific about where this rule acts."
+        }
+      },
+      "required": ["id", "rule", "principle_refs", "applies_to"]
+    },
+
+    "success_metric": {
+      "type": "object",
+      "description": "A metric measuring whether the product achieves its goals.",
+      "$comment": "Every metric must have BOTH a success signal and a failure signal. Optimistic-only metrics hide problems. These inform the roadmap's vision.success_criteria and validate the product_hypothesis.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "metric": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What is being measured.",
+          "$comment": "E.g., 'Calculation accuracy rate', 'Time from input to result', 'User retention at 30 days'."
+        },
+        "success_signal": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "How we know this aspect of the product works.",
+          "$comment": "Observable evidence of success. E.g., 'User completes calculation without errors on first attempt', '90% of users return within 7 days'."
+        },
+        "failure_signal": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "How we know this aspect is failing and causing frustration.",
+          "$comment": "Observable evidence of failure. E.g., 'User abandons calculation mid-flow', 'More than 20% of users do not return after first session'. This is NOT optional — every metric must define what failure looks like."
+        }
+      },
+      "required": ["id", "metric", "success_signal", "failure_signal"]
+    },
+
+    "product_decision": {
+      "type": "object",
+      "description": "A product-level decision with full context.",
+      "$comment": "Record every significant decision. Include enough context that a future reader understands WHY without asking. This prevents re-discussion. When a decision is also relevant at the roadmap level, create a compressed version in the roadmap's decisions array.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the decision was made.",
+          "$comment": "Set once. Immutable."
+        },
+        "decision": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "What was decided.",
+          "$comment": "Clear, unambiguous statement. E.g., 'Use Firebase Auth with custom claims for role management'. Not 'We might use Firebase'."
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Why this was decided, what alternatives were considered, what was discarded.",
+          "$comment": "Include: the trigger (what forced the decision), alternatives evaluated, why this option won, and what was explicitly discarded. The more context, the less future re-discussion."
+        },
+        "impact_on": {
+          "type": ["string", "null"],
+          "maxLength": 200,
+          "description": "Which capability, flow, rule, or aspect is affected.",
+          "$comment": "Optional. E.g., 'Essential capability #2', 'Tech stack', 'User registration flow'. Helps trace the blast radius of each decision."
+        }
+      },
+      "required": ["id", "created_at", "decision", "context"]
+    },
+
+    "open_question": {
+      "type": "object",
+      "description": "A question that cannot be answered yet.",
+      "$comment": "When resolved: (1) set status to 'resolved', (2) fill resolution, (3) create the corresponding entry — if it was a decision, add to product_decisions; if a rule, add to product_rules; if a capability, add to capabilities. Do not delete resolved questions — keep for audit trail.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequential identifier.",
+          "$comment": "Start at 1, increment by 1. Never reuse."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the question was raised.",
+          "$comment": "Set once. Immutable."
+        },
+        "question": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "The question we cannot answer yet.",
+          "$comment": "Be specific. Bad: 'What about auth?' Good: 'Should client role have read access to logbook recommendations field?' Vague questions produce vague answers."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "resolved"],
+          "description": "Whether the question has been answered.",
+          "$comment": "Set to 'resolved' only when a definitive answer exists and the corresponding entry (decision, rule, or capability) has been created."
+        },
+        "resolution": {
+          "type": ["string", "null"],
+          "maxLength": 300,
+          "description": "How the question was resolved. Null while open.",
+          "$comment": "Fill when status changes to 'resolved'. Include who decided and why. Reference the created decision/rule/capability if applicable."
+        }
+      },
+      "required": ["id", "created_at", "question", "status"]
+    },
+
+    "product_roadmap_ref": {
+      "type": "object",
+      "description": "Reference to a roadmap file associated with this product.",
+      "$comment": "Managed exclusively by roadmap-create. New entries are always prepended (index 0) — the first element is the most recent roadmap. Never append. Never insert manually from blueprint-create. The path is relative to ai_files/ within the same repository. For cross-project roadmaps, the path may use the portable format org/repo::waves/wN/roadmap.json.",
+      "properties": {
+        "wave": {
+          "type": "string",
+          "description": "Wave identifier: 'sub-zero', 'w0', 'w1', 'w2', etc.",
+          "$comment": "Must match the directory name under waves/. Use 'sub-zero' for validation waves, 'w0' for definition waves, 'w1'+ for business waves."
+        },
+        "path": {
+          "type": "string",
+          "description": "Relative path to the roadmap file from ai_files/.",
+          "$comment": "Standard format: waves/wN/roadmap.json. For cross-project references: org/repo::waves/wN/roadmap.json."
+        }
+      },
+      "required": ["wave", "path"]
+    }
+  }
+}

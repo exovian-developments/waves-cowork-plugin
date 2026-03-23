@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Check if ai_files/user_pref.json exists in the current working directory. If it exists, read it silently and apply the user's preferences (language, tone, explanation style) for this session. Then check if ai_files/project_manifest.json (or any manifest like research_manifest.json, creative_manifest.json, business_manifest.json, general_manifest.json) exists and read it to understand the project context. Also check for ai_files/project_rules.json or ai_files/project_standards.json. Do NOT display anything to the user about this — just internalize the context silently. If none of these files exist, do nothing.",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

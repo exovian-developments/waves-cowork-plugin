@@ -1,0 +1,941 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Feasibility Analysis Schema",
+  "description": "Pre-blueprint feasibility and market analysis. Validates an idea before defining the product. Answers CAN WE? and SHOULD WE? Sits before the product blueprint in the artifact hierarchy: feasibility → blueprint (WHAT/WHY) → roadmap (WHEN/ORDER) → logbook (HOW).",
+  "$comment": "One per idea or product concept. The agent acts as an expert business consultant — it listens in natural language, translates internally to technical variables (distributions, priors, unit economics), executes simulations behind the scenes, and explains results with natural language and interpretable graphics. The user never sees technical parameters directly. This document is iterable: the user can pivot market, revenue model, or assumptions and re-run projections within the same file. Each iteration is tracked in iteration_history. When readiness_for_blueprint is true, this document feeds into product-blueprint-create.",
+  "type": "object",
+  "properties": {
+    "meta": {
+      "type": "object",
+      "description": "Analysis identity and versioning.",
+      "$comment": "Set at creation. Update last_updated on every write. analysis_name is a short identifier used for the filename (e.g., 'exobase' produces exobase_feasibility.json).",
+      "properties": {
+        "analysis_name": {
+          "type": "string",
+          "description": "Short identifier for this analysis.",
+          "$comment": "Used as filename prefix: [analysis_name]_feasibility.json. Lowercase, no spaces. E.g., 'exobase', 'tutoring-app', 'saas-crm'."
+        },
+        "schema_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "description": "Schema version for forward compatibility.",
+          "$comment": "Current: '1.0'. Increment minor for additive changes, major for breaking changes."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when this analysis was created. Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp of last modification.",
+          "$comment": "Update on every write operation to this file."
+        },
+        "iteration_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of pivot/refinement iterations completed.",
+          "$comment": "Starts at 0. Incremented each time the user pivots market, model, assumptions, or adds a new scenario via the iteration loop (Step 11)."
+        }
+      },
+      "required": ["analysis_name", "schema_version", "created_at", "last_updated", "iteration_count"]
+    },
+
+    "idea_profile": {
+      "type": "object",
+      "description": "The core idea, the problem it solves, timing, and founder advantage.",
+      "$comment": "Gathered conversationally in Step 1. The agent asks open questions and extracts structure from natural language. If the idea is vague, the agent suggests concrete angles based on user skills. If too broad, the agent suggests niches.",
+      "properties": {
+        "core_idea": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "The idea in one sentence.",
+          "$comment": "Ask: 'Describe your idea in one sentence'. Extract the essence. If the user gives a paragraph, distill to one clear sentence that captures what the product does and for whom."
+        },
+        "problem_statement": {
+          "type": "object",
+          "description": "The problem decomposed into three dimensions: pain, reality, unsolved.",
+          "$comment": "Same structure as product_blueprint.problem. This validates the problem exists before investing in a full blueprint. Each dimension must be grounded in observable reality, not speculation.",
+          "properties": {
+            "pain": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "What pain exists? The specific suffering users experience.",
+              "$comment": "Ask: 'What specific problem does this solve?' Describe concrete, observable pain felt by real people. Not abstract industry trends."
+            },
+            "reality": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "Why is this pain real? Evidence that the problem is genuine.",
+              "$comment": "Ask: 'How do you know this problem is real?' Look for frequency, impact, who suffers, how many. If user has no evidence, flag as a risk in bayesian_analysis."
+            },
+            "unsolved": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "Why hasn't this been solved? What exists and why does it fall short?",
+              "$comment": "Ask: 'What do people use today and why doesn't it work?' Identify gaps in existing solutions. If existing solutions work well, challenge whether there is an opportunity."
+            }
+          },
+          "required": ["pain", "reality", "unsolved"]
+        },
+        "why_now": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Why is now the right time for this idea?",
+          "$comment": "Ask: 'What changed in the market that makes this possible or necessary now?' Look for technology shifts, regulatory changes, cultural shifts, market gaps that recently appeared. If no clear timing advantage, note as a risk."
+        },
+        "founder_advantage": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "What unique advantage does the founder have to solve this problem?",
+          "$comment": "Ask: 'What advantage do YOU specifically have?' Look for domain expertise, network, technical skills, unique insight, existing audience. If no clear advantage, the agent should proactively suggest angles where the user's skills create differentiation."
+        }
+      },
+      "required": ["core_idea", "problem_statement", "why_now", "founder_advantage"]
+    },
+
+    "user_resources": {
+      "type": "object",
+      "description": "The founder's real capacity: time, money, skills, network, constraints.",
+      "$comment": "Gathered in Step 2. These are HARD constraints that feed directly into Monte Carlo variables and kill criteria. The agent must translate natural language ('I can work evenings and weekends') into numeric parameters internally (e.g., 15 hours/week).",
+      "properties": {
+        "time_weekly_hours": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Hours per week the user can dedicate to this project.",
+          "$comment": "Ask naturally: 'How much time can you dedicate?' Convert answers like 'evenings and weekends' to approximate hours. This constrains time_to_mvp and time_to_first_revenue estimates."
+        },
+        "runway_months": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Months the user can operate without revenue from this project.",
+          "$comment": "Ask: 'How long can you sustain this without income from it?' This is CRITICAL for kill criteria in Monte Carlo — if probability of revenue by runway end is too low, the analysis flags it."
+        },
+        "skills": {
+          "type": "array",
+          "description": "User's relevant skills with proficiency level.",
+          "$comment": "Ask: 'What are your skills?' For each skill, the agent internally assesses level and relevance to the idea. Levels: beginner, intermediate, advanced, expert. Relevance: how directly the skill contributes to building and launching.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "skill": {
+                "type": "string",
+                "description": "Name of the skill.",
+                "$comment": "E.g., 'Flutter development', 'Digital marketing', 'Construction industry knowledge', 'Sales'."
+              },
+              "level": {
+                "type": "string",
+                "enum": ["beginner", "intermediate", "advanced", "expert"],
+                "description": "Proficiency level.",
+                "$comment": "Assessed by the agent from the conversation. Do not ask the user to self-rate with these labels — infer from their description."
+              },
+              "relevance": {
+                "type": "string",
+                "enum": ["core", "supporting", "tangential"],
+                "description": "How relevant this skill is to the idea.",
+                "$comment": "core: directly needed to build/launch. supporting: helpful but not essential. tangential: nice to have, indirect value."
+              }
+            },
+            "required": ["skill", "level", "relevance"]
+          }
+        },
+        "financial_capacity": {
+          "type": "object",
+          "description": "Financial resources available for the project.",
+          "$comment": "Ask naturally: 'Do you have budget to invest? What are your fixed monthly costs?' These feed into Monte Carlo as constraints and into kill criteria.",
+          "properties": {
+            "initial_investment_available": {
+              "type": "number",
+              "minimum": 0,
+              "description": "One-time investment the user can make upfront.",
+              "$comment": "In the user's currency. Includes tools, licenses, hosting, marketing budget, etc."
+            },
+            "monthly_fixed_costs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Monthly personal expenses the user needs to cover.",
+              "$comment": "This defines the survival_monthly revenue target. The user's fixed costs are the floor — revenue must exceed this to be sustainable."
+            },
+            "currency": {
+              "type": "string",
+              "description": "Currency for all monetary values in this document.",
+              "$comment": "ISO 4217 code. E.g., 'USD', 'EUR', 'CRC'. Set once, use consistently throughout."
+            }
+          },
+          "required": ["initial_investment_available", "monthly_fixed_costs", "currency"]
+        },
+        "network": {
+          "type": "object",
+          "description": "Existing contacts, communities, and potential partners.",
+          "$comment": "Ask: 'Do you have contacts in this industry? Communities you belong to? Potential partners?' Network affects acquisition channels and early customer access in Monte Carlo.",
+          "properties": {
+            "industry_contacts": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Approximate number of relevant industry contacts.",
+              "$comment": "People who could become early users, refer users, or provide market intel."
+            },
+            "communities": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Online or offline communities the user participates in.",
+              "$comment": "E.g., 'Construction WhatsApp groups', 'Local startup meetup', 'Reddit r/freelancing'. These are potential acquisition channels."
+            },
+            "potential_partners": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "People or organizations that could partner on this project.",
+              "$comment": "Named individuals or organizations. These feed into partnership_opportunities in proactive_suggestions."
+            }
+          },
+          "required": ["industry_contacts", "communities", "potential_partners"]
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hard constraints the user faces.",
+          "$comment": "E.g., 'Cannot quit day job for 6 months', 'No experience with mobile development', 'Limited to Latin American market'. These constrain the solution space and feed into Monte Carlo assumptions."
+        }
+      },
+      "required": ["time_weekly_hours", "runway_months", "skills", "financial_capacity", "network", "constraints"]
+    },
+
+    "market_analysis": {
+      "type": "object",
+      "description": "Market sizing, competitors, gaps, and unfair advantages.",
+      "$comment": "Gathered in Step 3. The agent helps the user estimate TAM/SAM/SOM — if the user does not know these, the agent suggests ranges based on the industry and available data. After each answer, the agent proactively suggests alternative positioning angles.",
+      "properties": {
+        "tam": {
+          "type": "object",
+          "description": "Total Addressable Market.",
+          "$comment": "The total market demand for the product category. Ask: 'How big is the overall market for what you want to build?' If user does not know, the agent estimates based on industry data and explains the reasoning.",
+          "properties": {
+            "value": { "type": "number", "minimum": 0, "description": "Estimated market size in currency." },
+            "unit": { "type": "string", "description": "Annual or monthly basis.", "$comment": "Usually 'annual'. Specify clearly." },
+            "source": { "type": "string", "description": "How this estimate was derived.", "$comment": "E.g., 'Industry report X', 'Agent estimate based on Y', 'User provided'." }
+          },
+          "required": ["value", "unit", "source"]
+        },
+        "sam": {
+          "type": "object",
+          "description": "Serviceable Addressable Market.",
+          "$comment": "The portion of TAM the product can realistically serve given its positioning, geography, and capabilities.",
+          "properties": {
+            "value": { "type": "number", "minimum": 0, "description": "Estimated serviceable market size." },
+            "unit": { "type": "string" },
+            "source": { "type": "string" }
+          },
+          "required": ["value", "unit", "source"]
+        },
+        "som": {
+          "type": "object",
+          "description": "Serviceable Obtainable Market.",
+          "$comment": "The realistic share the product can capture in the timeline given resources and competition. This is the most honest number — used in Monte Carlo as the ceiling for customer acquisition.",
+          "properties": {
+            "value": { "type": "number", "minimum": 0, "description": "Estimated obtainable market size." },
+            "unit": { "type": "string" },
+            "source": { "type": "string" }
+          },
+          "required": ["value", "unit", "source"]
+        },
+        "competitors": {
+          "type": "array",
+          "description": "Known competitors and their positioning.",
+          "$comment": "For each competitor: name, how they position themselves, their pricing, and the gap they leave that this idea can fill. The agent proactively suggests competitors the user may not know about.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "Competitor name." },
+              "positioning": { "type": "string", "maxLength": 200, "description": "How they position themselves in the market." },
+              "pricing": { "type": "string", "maxLength": 200, "description": "Their pricing model and range." },
+              "gap": { "type": "string", "maxLength": 300, "description": "What gap they leave that this idea can fill.", "$comment": "This is the opportunity. If no clear gap exists, challenge whether there is a real opportunity." }
+            },
+            "required": ["name", "positioning", "pricing", "gap"]
+          }
+        },
+        "market_gap": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "The specific gap in the market this idea fills.",
+          "$comment": "Synthesized from competitor analysis. This must be a gap that existing players are NOT addressing and that aligns with the user's founder_advantage."
+        },
+        "unfair_advantages": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 },
+          "description": "Competitive advantages that are hard to replicate.",
+          "$comment": "E.g., 'Deep domain expertise in construction', 'Existing network of 200 contractors', 'Proprietary dataset'. These feed into bayesian_analysis as evidence for viability."
+        }
+      },
+      "required": ["tam", "sam", "som", "competitors", "market_gap", "unfair_advantages"]
+    },
+
+    "buyer_personas": {
+      "type": "array",
+      "description": "1-3 concrete buyer personas with specific pain points and behaviors.",
+      "$comment": "Gathered in Step 4. Each persona is a REAL person described in the user's own words — not a marketing segment. The agent asks about specific people the user knows or has observed. E.g., 'Tell me about a specific person who has this problem — what does their day look like?'. The agent suggests additional personas if it detects adjacent markets.",
+      "items": {
+        "$ref": "#/$defs/buyer_persona"
+      },
+      "minItems": 1,
+      "maxItems": 3
+    },
+
+    "revenue_model": {
+      "type": "object",
+      "description": "How the product generates money: model type, streams, pricing, flywheel.",
+      "$comment": "Gathered in Step 5. If the user defines only one stream, the agent proactively suggests 2-3 complementary streams with justification. The flywheel describes how streams reinforce each other (e.g., more marketplace users → more data → better recommendations → more premium subscriptions).",
+      "properties": {
+        "model_type": {
+          "type": "string",
+          "enum": ["subscription", "marketplace", "hybrid", "transactional", "freemium", "advertising"],
+          "description": "Primary business model type.",
+          "$comment": "The dominant model. If multiple models apply, use 'hybrid' and describe each stream separately."
+        },
+        "streams": {
+          "type": "array",
+          "description": "Individual revenue streams with unit economics.",
+          "$comment": "Each stream has its own pricing, unit economics, and contribution to total revenue. These feed directly into Monte Carlo as separate simulation variables.",
+          "items": {
+            "$ref": "#/$defs/revenue_stream"
+          },
+          "minItems": 1
+        },
+        "pricing_tiers": {
+          "type": "array",
+          "description": "Pricing tiers if applicable.",
+          "$comment": "E.g., Free, Basic ($10/mo), Pro ($25/mo), Enterprise (custom). Each tier describes what is included and the target persona.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tier_name": { "type": "string", "description": "Name of the tier." },
+              "price": { "type": "string", "description": "Price point.", "$comment": "E.g., '$10/month', '$500/project', 'Free'." },
+              "includes": { "type": "string", "maxLength": 300, "description": "What is included in this tier." },
+              "target_persona": { "type": "string", "description": "Which buyer persona this tier targets.", "$comment": "Reference by persona name from buyer_personas." }
+            },
+            "required": ["tier_name", "price", "includes"]
+          }
+        },
+        "flywheel_description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "How the revenue streams reinforce each other.",
+          "$comment": "Describe the positive feedback loop. E.g., 'More contractors on marketplace → more projects visible → more clients join → higher commission volume → funds for better tools → more contractors attracted'. If no flywheel exists, note that each stream operates independently."
+        }
+      },
+      "required": ["model_type", "streams", "pricing_tiers", "flywheel_description"]
+    },
+
+    "revenue_targets": {
+      "type": "object",
+      "description": "What the user NEEDS to achieve financially. Monte Carlo evaluates the PROBABILITY of reaching these targets.",
+      "$comment": "Gathered in Step 6. Three tiers from basic survival to comfortable income. The agent asks: 'What is the minimum you need monthly to survive? What would cover all your expenses comfortably? What is your dream income from this?' The timeline is how long the user gives themselves to reach these targets.",
+      "properties": {
+        "survival_monthly": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum monthly income to survive (cover basic needs).",
+          "$comment": "The absolute floor. Below this, the project is not viable for the user. Used as the first probability threshold in Monte Carlo."
+        },
+        "intermediate_monthly": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Monthly income that covers all expenses comfortably.",
+          "$comment": "The 'I can breathe' level. All bills paid, some savings. Second probability threshold in Monte Carlo."
+        },
+        "comfortable_monthly": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Target monthly income for a comfortable lifestyle.",
+          "$comment": "The user's real goal. Third and highest probability threshold in Monte Carlo."
+        },
+        "timeline_months": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Months the user gives themselves to reach the comfortable target.",
+          "$comment": "This defines the simulation horizon for Monte Carlo. The agent should reality-check this against runway_months — if timeline exceeds runway, flag as a critical risk."
+        }
+      },
+      "required": ["survival_monthly", "intermediate_monthly", "comfortable_monthly", "timeline_months"]
+    },
+
+    "revenue_projections": {
+      "type": "array",
+      "description": "Array of projection scenarios. Each scenario contains Monte Carlo simulation and Bayesian analysis results.",
+      "$comment": "Built in Steps 7-8. The array is iterable — the user can add scenarios (base, optimistic, conservative, pivot) within the same analysis. Each scenario has its own assumptions, Monte Carlo variables, and results. The agent generates and executes a Python script for each simulation, stores results here.",
+      "items": {
+        "$ref": "#/$defs/projection_scenario"
+      },
+      "minItems": 1
+    },
+
+    "essential_capabilities_draft": {
+      "type": "object",
+      "description": "Draft of minimum capabilities needed to start generating revenue.",
+      "$comment": "Built in Step 9 based on revenue model, personas, and Monte Carlo results. This is a DRAFT — it feeds into the future product_blueprint.essential_capabilities. Classified by revenue impact: revenue_blocking (cannot earn without it), revenue_enabling (accelerates earning), usage_expansion (grows engagement).",
+      "properties": {
+        "core_capabilities": {
+          "type": "array",
+          "description": "Minimum capabilities for revenue generation, classified by impact.",
+          "$comment": "Each capability describes what the user/product can DO, not technical implementation. Classify as revenue_blocking (MVP must-have), revenue_enabling (accelerates growth), or usage_expansion (deepens engagement).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "capability": {
+                "type": "string",
+                "maxLength": 300,
+                "description": "What the product lets the user do.",
+                "$comment": "Format: 'The user can [specific action]'. Natural language, no technical specs."
+              },
+              "classification": {
+                "type": "string",
+                "enum": ["revenue_blocking", "revenue_enabling", "usage_expansion"],
+                "description": "How this capability relates to revenue.",
+                "$comment": "revenue_blocking: product cannot earn money without this. revenue_enabling: money can come in without it but much slower. usage_expansion: grows engagement and retention."
+              },
+              "revenue_impact": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "How this capability contributes to revenue.",
+                "$comment": "E.g., 'Enables marketplace fee collection on every transaction', 'Increases retention by 20% based on comparable products'."
+              },
+              "build_effort_days": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Estimated days to build this capability.",
+                "$comment": "Rough estimate based on user's skills and time availability. The agent calculates this internally from the user's weekly hours and skill level."
+              },
+              "priority": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Build priority (1 = build first).",
+                "$comment": "Lower is higher priority. All revenue_blocking should be prioritized before revenue_enabling."
+              }
+            },
+            "required": ["capability", "classification", "revenue_impact", "build_effort_days", "priority"]
+          }
+        },
+        "essential_flows_draft": {
+          "type": "array",
+          "description": "Critical user flows needed for the MVP.",
+          "$comment": "A draft that feeds into product_blueprint.essential_flows_and_views. Focus on the minimum flows to complete a revenue cycle (user signs up → uses product → pays → gets value).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "flow_name": { "type": "string", "maxLength": 100, "description": "Short name for the flow." },
+              "description": { "type": "string", "maxLength": 300, "description": "What the user does from start to finish." },
+              "revenue_connection": { "type": "string", "maxLength": 200, "description": "How this flow connects to revenue generation.", "$comment": "E.g., 'This is the purchasing flow — money enters here', 'This is the onboarding flow — without it, users cannot reach the purchasing flow'." }
+            },
+            "required": ["flow_name", "description", "revenue_connection"]
+          }
+        },
+        "time_to_mvp_weeks": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated weeks to build the MVP (all revenue_blocking capabilities).",
+          "$comment": "Calculated from the sum of build_effort_days for revenue_blocking capabilities, divided by weekly hours. The agent presents this in natural language: 'Based on your availability, the MVP would take approximately X weeks'."
+        },
+        "time_to_first_revenue_weeks": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated weeks from start to first dollar of revenue.",
+          "$comment": "time_to_mvp_weeks + estimated time to acquire first paying customer. The agent explains the gap between MVP completion and first revenue."
+        }
+      },
+      "required": ["core_capabilities", "essential_flows_draft", "time_to_mvp_weeks", "time_to_first_revenue_weeks"]
+    },
+
+    "proactive_suggestions": {
+      "type": "object",
+      "description": "Agent-generated suggestions to spark user imagination and improve viability.",
+      "$comment": "Consolidated in Step 10 from suggestions accumulated throughout the analysis. These are the agent's expert recommendations — positioning alternatives, marketing strategies, feature ideas, and partnership opportunities. The agent presents these proactively, not just when asked.",
+      "properties": {
+        "positioning_angles": {
+          "type": "array",
+          "description": "Alternative ways to position the product in the market.",
+          "$comment": "Each angle suggests a different market segment or value proposition. The agent explains the trade-offs of each angle.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "angle": { "type": "string", "maxLength": 200, "description": "The positioning angle." },
+              "rationale": { "type": "string", "maxLength": 300, "description": "Why this angle could work." },
+              "target_segment_shift": { "type": "string", "maxLength": 200, "description": "How the target market shifts with this angle.", "$comment": "E.g., 'From general contractors to specialty subcontractors', 'From B2C to B2B2C'." }
+            },
+            "required": ["angle", "rationale", "target_segment_shift"]
+          }
+        },
+        "marketing_strategies": {
+          "type": "array",
+          "description": "Suggested marketing strategies with effort and ROI estimates.",
+          "$comment": "Concrete, actionable strategies the user can start immediately. The agent ranks by effort-to-impact ratio.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "strategy": { "type": "string", "maxLength": 200, "description": "The marketing strategy." },
+              "effort": { "type": "string", "enum": ["low", "medium", "high"], "description": "Effort required to execute." },
+              "expected_roi": { "type": "string", "maxLength": 200, "description": "Expected return on investment.", "$comment": "Qualitative: 'high ROI for low effort', or quantitative if data exists." },
+              "timeline": { "type": "string", "maxLength": 100, "description": "Time to see results.", "$comment": "E.g., '2-4 weeks', '3-6 months'." }
+            },
+            "required": ["strategy", "effort", "expected_roi", "timeline"]
+          }
+        },
+        "capability_ideas": {
+          "type": "array",
+          "description": "Feature or capability ideas the agent suggests for differentiation.",
+          "$comment": "Ideas the user may not have considered. The agent explains how each idea differentiates from competitors and its potential impact on revenue.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "idea": { "type": "string", "maxLength": 200, "description": "The capability idea." },
+              "differentiator": { "type": "string", "maxLength": 200, "description": "How it differentiates from competitors." },
+              "impact": { "type": "string", "enum": ["high", "medium", "low"], "description": "Expected impact on viability." },
+              "complexity": { "type": "string", "enum": ["low", "medium", "high"], "description": "Estimated build complexity." }
+            },
+            "required": ["idea", "differentiator", "impact", "complexity"]
+          }
+        },
+        "partnership_opportunities": {
+          "type": "array",
+          "description": "Potential partnerships that could accelerate growth.",
+          "$comment": "Named organizations or types of partners. The agent explains the mutual value proposition.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "partner": { "type": "string", "maxLength": 200, "description": "Who to partner with." },
+              "mutual_value": { "type": "string", "maxLength": 300, "description": "What each side gains from the partnership." },
+              "approach": { "type": "string", "maxLength": 200, "description": "How to approach this partner.", "$comment": "Concrete next step: 'Email the manager at X', 'Join their affiliate program', 'Propose a pilot at their next event'." }
+            },
+            "required": ["partner", "mutual_value", "approach"]
+          }
+        }
+      },
+      "required": ["positioning_angles", "marketing_strategies", "capability_ideas", "partnership_opportunities"]
+    },
+
+    "iteration_history": {
+      "type": "array",
+      "description": "Log of pivots and refinements made during the analysis.",
+      "$comment": "Each time the user chooses to iterate in Step 11 (pivot market, pivot model, new scenario, etc.), a record is added here. This provides traceability of how the idea evolved. The impact_on_viability field captures whether the change improved or worsened the projections.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "iteration_number": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Sequential iteration number.",
+            "$comment": "Starts at 1, increments by 1."
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this iteration was performed."
+          },
+          "change_type": {
+            "type": "string",
+            "enum": ["pivot_market", "pivot_model", "refine_assumptions", "new_scenario", "update_evidence", "refine_capabilities"],
+            "description": "Type of change made.",
+            "$comment": "pivot_market: changed target market or personas. pivot_model: changed revenue model or streams. refine_assumptions: adjusted Monte Carlo variables. new_scenario: added a new projection scenario. update_evidence: added Bayesian evidence. refine_capabilities: changed essential capabilities."
+          },
+          "what_changed": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Specific description of what was changed."
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Why the change was made.",
+            "$comment": "E.g., 'Monte Carlo showed only 24% probability of survival — adding premium services stream increases to 68%'."
+          },
+          "impact_on_viability": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "How the change affected projected viability.",
+            "$comment": "Quantify when possible: 'P(survival) increased from 24% to 68%', 'Bayesian confidence in market existence rose from 45% to 72%'."
+          }
+        },
+        "required": ["iteration_number", "timestamp", "change_type", "what_changed", "rationale", "impact_on_viability"]
+      }
+    },
+
+    "next_steps": {
+      "type": "object",
+      "description": "Assessment of readiness to proceed to blueprint and recommended actions.",
+      "$comment": "Updated at Step 11-12. When readiness_for_blueprint is true and confidence_level is medium or high, the analysis is complete and the user should proceed to product-blueprint-create. Otherwise, recommended_actions lists what to do next to increase confidence.",
+      "properties": {
+        "readiness_for_blueprint": {
+          "type": "boolean",
+          "description": "Whether the analysis supports proceeding to product blueprint.",
+          "$comment": "True when: at least one scenario shows >60% probability of reaching survival target, bayesian posterior for market existence is >70%, and essential capabilities draft is complete. The agent explains the reasoning behind this assessment."
+        },
+        "confidence_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Overall confidence in the idea's viability.",
+          "$comment": "low: significant unknowns, low probabilities. medium: promising but needs validation. high: strong evidence, good probabilities. Based on Monte Carlo results and Bayesian posteriors."
+        },
+        "recommended_actions": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 300 },
+          "description": "Specific actions to take before proceeding.",
+          "$comment": "E.g., 'Talk to 5 potential customers in the construction industry', 'Build a landing page and measure signups', 'Run a pilot with 3 contractors for 2 weeks'. Prioritized by impact on confidence."
+        },
+        "remaining_unknowns": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 },
+          "description": "Questions that remain unanswered.",
+          "$comment": "These come from bayesian_analysis.next_evidence_to_gather and open questions discovered during the analysis. Each unknown, if resolved, would significantly change the projections."
+        }
+      },
+      "required": ["readiness_for_blueprint", "confidence_level", "recommended_actions", "remaining_unknowns"]
+    }
+  },
+
+  "required": [
+    "meta", "idea_profile", "user_resources", "market_analysis", "buyer_personas",
+    "revenue_model", "revenue_targets", "revenue_projections",
+    "essential_capabilities_draft", "proactive_suggestions",
+    "iteration_history", "next_steps"
+  ],
+
+  "$defs": {
+    "buyer_persona": {
+      "type": "object",
+      "description": "A concrete buyer persona with specific pain points and purchasing behavior.",
+      "$comment": "Each persona is a REAL person the user knows or has observed — not a marketing segment. Described in the user's own words. The agent asks about specific people: 'Tell me about someone you know who has this problem. What is their day like?'",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "A descriptive name for this persona.",
+          "$comment": "Not a real name — a role-based label. E.g., 'The overwhelmed foreman', 'The solo freelancer', 'The small business owner'. Should evoke the person's situation."
+        },
+        "age_range": {
+          "type": "string",
+          "description": "Approximate age range.",
+          "$comment": "E.g., '30-45', '25-35'. Helps ground the persona in reality."
+        },
+        "occupation": {
+          "type": "string",
+          "description": "What they do for a living.",
+          "$comment": "Their current role and context. E.g., 'Independent contractor managing 3-5 projects simultaneously'."
+        },
+        "pain_points": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 },
+          "description": "Specific problems they face, in their own words.",
+          "$comment": "Write as if the persona is speaking: 'I spend 2 hours every morning just organizing which crew goes where', 'I lose money because I cannot track material costs in real time'. These must connect to the problem_statement."
+        },
+        "current_solution": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "How they solve the problem today.",
+          "$comment": "What tools, workarounds, or manual processes they use. E.g., 'Excel spreadsheets and WhatsApp groups', 'Paper notebooks and phone calls'. Understanding the current solution reveals switching costs and the minimum bar the product must clear."
+        },
+        "willingness_to_pay": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "How much and how they would pay.",
+          "$comment": "Ask: 'Would this person pay for a solution? How much?' E.g., '$15/month without hesitation', 'Would need a free trial first, then maybe $50/month', 'Would only pay if it saves them >2 hours/week'. This feeds into Monte Carlo pricing assumptions."
+        },
+        "acquisition_channel": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Most likely way to reach this person.",
+          "$comment": "Where they spend time, what they read, who they trust. E.g., 'WhatsApp groups of local contractors', 'Instagram construction pages', 'Word of mouth from material suppliers'. This feeds into Monte Carlo acquisition rate assumptions."
+        },
+        "decision_triggers": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 },
+          "description": "What would make them decide to buy.",
+          "$comment": "Specific events or conditions. E.g., 'Losing money on a project due to bad cost tracking', 'Seeing a competitor use the tool successfully', 'A free trial that saves them time on day one'. These inform marketing strategy and onboarding design."
+        }
+      },
+      "required": ["name", "age_range", "occupation", "pain_points", "current_solution", "willingness_to_pay", "acquisition_channel", "decision_triggers"]
+    },
+
+    "revenue_stream": {
+      "type": "object",
+      "description": "A single revenue stream with pricing and unit economics.",
+      "$comment": "Each stream is simulated independently in Monte Carlo. The unit economics define the per-transaction or per-user value that feeds into the simulation variables.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the revenue stream.",
+          "$comment": "E.g., 'Marketplace commission', 'SaaS subscription', 'Payment processing fee', 'Sponsored listings'."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "How this stream generates revenue."
+        },
+        "pricing": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Pricing structure for this stream.",
+          "$comment": "E.g., '15-30% commission per transaction', '$15/month per user', '4% of payment volume'."
+        },
+        "unit_economics": {
+          "type": "object",
+          "description": "Per-unit economics for this stream.",
+          "$comment": "These values feed directly into Monte Carlo as distribution parameters. The agent translates the user's natural language ('I think I can charge around $20-30 per project') into distribution parameters internally.",
+          "properties": {
+            "revenue_per_unit": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Expected revenue per unit (transaction, user, project).",
+              "$comment": "The mode of the distribution (most likely value). The agent internally sets min and max for the triangular distribution."
+            },
+            "unit_type": {
+              "type": "string",
+              "description": "What constitutes one unit.",
+              "$comment": "E.g., 'transaction', 'monthly subscriber', 'project completion', 'ad impression'."
+            },
+            "cost_per_unit": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Cost to deliver one unit.",
+              "$comment": "Including payment processing, hosting, support, etc. Subtracted from revenue_per_unit to get margin."
+            }
+          },
+          "required": ["revenue_per_unit", "unit_type", "cost_per_unit"]
+        }
+      },
+      "required": ["name", "description", "pricing", "unit_economics"]
+    },
+
+    "projection_scenario": {
+      "type": "object",
+      "description": "A complete projection scenario with Monte Carlo and Bayesian analysis.",
+      "$comment": "Each scenario represents a different set of assumptions. The 'base' scenario uses the user's best estimates. 'optimistic' and 'conservative' adjust the distributions. 'pivot' scenarios test entirely different models or markets. The agent creates and executes a Python script for each Monte Carlo simulation.",
+      "properties": {
+        "scenario_id": {
+          "type": "string",
+          "description": "Unique identifier for this scenario.",
+          "$comment": "E.g., 'base', 'optimistic', 'conservative', 'pivot_b2b', 'premium_services'."
+        },
+        "scenario_name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Human-readable name.",
+          "$comment": "E.g., 'Base scenario', 'Optimistic growth', 'Conservative estimate', 'B2B pivot'."
+        },
+        "base_assumptions": {
+          "type": "object",
+          "description": "Key assumptions underlying this scenario.",
+          "$comment": "Narrative description of what the scenario assumes. The agent writes this in natural language for the user.",
+          "properties": {
+            "growth_narrative": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "How the business grows in this scenario, in plain language.",
+              "$comment": "E.g., 'You acquire 5-10 new customers per month through WhatsApp groups and word of mouth. 15% of trial users convert to paid. Monthly churn is around 5%. By month 6, the marketplace commission becomes the dominant revenue source.'"
+            },
+            "key_variables": {
+              "type": "object",
+              "description": "Summary of key numeric assumptions.",
+              "$comment": "High-level: growth rate, churn, average revenue per user, main channels. The detailed distributions are in monte_carlo.variables.",
+              "properties": {
+                "monthly_growth_rate": { "type": "string", "description": "Expected monthly customer growth.", "$comment": "E.g., '10-15% month over month' or '5-10 new customers/month'." },
+                "monthly_churn_rate": { "type": "string", "description": "Expected monthly customer loss.", "$comment": "E.g., '3-5% monthly churn'." },
+                "average_revenue_per_user": { "type": "string", "description": "Expected ARPU.", "$comment": "E.g., '$20-30/month'." },
+                "primary_channels": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Main customer acquisition channels."
+                }
+              },
+              "required": ["monthly_growth_rate", "monthly_churn_rate", "average_revenue_per_user", "primary_channels"]
+            }
+          },
+          "required": ["growth_narrative", "key_variables"]
+        },
+        "monte_carlo": {
+          "type": "object",
+          "description": "Monte Carlo simulation configuration and results.",
+          "$comment": "The agent builds this internally from the conversation. The user never sees distribution parameters — only the natural language results and interpretable graphics.",
+          "properties": {
+            "config": {
+              "type": "object",
+              "description": "Simulation configuration.",
+              "properties": {
+                "n_simulations": { "type": "integer", "minimum": 1000, "description": "Number of simulations to run.", "$comment": "Default: 10000. More simulations = more stable results." },
+                "n_months": { "type": "integer", "minimum": 1, "description": "Months to simulate.", "$comment": "Must match or exceed revenue_targets.timeline_months." }
+              },
+              "required": ["n_simulations", "n_months"]
+            },
+            "variables": {
+              "type": "array",
+              "description": "Stochastic variables with their distributions.",
+              "$comment": "Each variable has a distribution type and parameters. The agent sets these internally from the conversation. Common distributions: triangular (min, mode, max) for revenue/pricing, normal (mean, std) for growth rates, uniform (min, max) for conversion rates.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "variable": { "type": "string", "description": "Variable name.", "$comment": "Technical name used in the Python script. E.g., 'monthly_acquisition_rate', 'saas_price', 'churn_rate'." },
+                  "display_name": { "type": "string", "description": "Human-readable name for graphics.", "$comment": "What the user sees in charts. E.g., 'New customers per month', 'Monthly subscription price', 'Customers lost per month'. Always in the user's preferred language." },
+                  "distribution": { "type": "string", "enum": ["triangular", "normal", "uniform", "lognormal"], "description": "Statistical distribution type." },
+                  "params": {
+                    "type": "object",
+                    "description": "Distribution parameters.",
+                    "$comment": "For triangular: {min, mode, max}. For normal: {mean, std}. For uniform: {min, max}. For lognormal: {mean, sigma}.",
+                    "additionalProperties": { "type": "number" }
+                  },
+                  "stream": { "type": ["string", "null"], "description": "Which revenue stream this variable belongs to.", "$comment": "Null for cross-stream variables (like churn). Otherwise references stream name." }
+                },
+                "required": ["variable", "display_name", "distribution", "params"]
+              }
+            },
+            "results": {
+              "type": "object",
+              "description": "Simulation results.",
+              "$comment": "Populated after running the Python script. Contains month-by-month projections and probability of hitting each target.",
+              "properties": {
+                "month_by_month": {
+                  "type": "array",
+                  "description": "Results for each simulated month.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "month": { "type": "integer", "minimum": 1 },
+                      "mrr_median": { "type": "number", "description": "Median monthly recurring revenue." },
+                      "mrr_p10": { "type": "number", "description": "10th percentile (pessimistic)." },
+                      "mrr_p25": { "type": "number", "description": "25th percentile." },
+                      "mrr_p75": { "type": "number", "description": "75th percentile." },
+                      "mrr_p90": { "type": "number", "description": "90th percentile (optimistic)." },
+                      "customers_median": { "type": "number", "description": "Median customer count." },
+                      "stream_breakdown": {
+                        "type": "object",
+                        "description": "Revenue breakdown by stream.",
+                        "$comment": "Keys are stream names, values are median revenue for that stream.",
+                        "additionalProperties": { "type": "number" }
+                      }
+                    },
+                    "required": ["month", "mrr_median", "mrr_p10", "mrr_p90"]
+                  }
+                },
+                "probability_targets": {
+                  "type": "object",
+                  "description": "Probability of hitting each revenue target at the end of the timeline.",
+                  "$comment": "These are the key results the agent presents to the user: 'There is a X% chance you reach your survival target by month Y'.",
+                  "properties": {
+                    "prob_survival": { "type": "number", "minimum": 0, "maximum": 1, "description": "Probability of reaching survival_monthly by timeline end." },
+                    "prob_intermediate": { "type": "number", "minimum": 0, "maximum": 1, "description": "Probability of reaching intermediate_monthly by timeline end." },
+                    "prob_comfortable": { "type": "number", "minimum": 0, "maximum": 1, "description": "Probability of reaching comfortable_monthly by timeline end." }
+                  },
+                  "required": ["prob_survival", "prob_intermediate", "prob_comfortable"]
+                },
+                "sensitivity_analysis": {
+                  "type": "array",
+                  "description": "Variables ranked by impact on outcomes.",
+                  "$comment": "The agent calculates sensitivity by varying each variable independently and measuring the change in median revenue. Presented as the 'What affects your result most?' chart.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "variable": { "type": "string" },
+                      "display_name": { "type": "string" },
+                      "impact_rank": { "type": "integer", "minimum": 1, "description": "1 = highest impact." },
+                      "impact_description": { "type": "string", "maxLength": 200, "description": "Natural language description of the impact.", "$comment": "E.g., 'Increasing your monthly customer acquisition by 5 would raise your median income by $2,000/month'." }
+                    },
+                    "required": ["variable", "display_name", "impact_rank", "impact_description"]
+                  }
+                }
+              },
+              "required": ["month_by_month", "probability_targets", "sensitivity_analysis"]
+            }
+          },
+          "required": ["config", "variables", "results"]
+        },
+        "bayesian_analysis": {
+          "type": "object",
+          "description": "Bayesian belief update based on evidence.",
+          "$comment": "The agent guides this entirely. For priors: asks 'On a scale of 1-10, how confident are you that the market exists?' and converts to probability internally. For evidence: asks about experiences, data, observations and assigns likelihood_ratios internally. The user never sees 'likelihood_ratio' — only 'This evidence strengthens/weakens your case by X%'.",
+          "properties": {
+            "prior_beliefs": {
+              "type": "object",
+              "description": "Initial confidence in three core beliefs.",
+              "$comment": "Three fundamental questions every business must answer. The agent asks these in natural language and converts to probabilities.",
+              "properties": {
+                "market_exists": { "type": "number", "minimum": 0, "maximum": 1, "description": "Prior probability that the target market genuinely exists and has the described pain." },
+                "can_reach_customers": { "type": "number", "minimum": 0, "maximum": 1, "description": "Prior probability of reaching N customers within the timeline." },
+                "can_achieve_profitability": { "type": "number", "minimum": 0, "maximum": 1, "description": "Prior probability of achieving profitability within the timeline." }
+              },
+              "required": ["market_exists", "can_reach_customers", "can_achieve_profitability"]
+            },
+            "evidence": {
+              "type": "array",
+              "description": "Evidence collected that updates the prior beliefs.",
+              "$comment": "Each piece of evidence has a likelihood_ratio assigned by the agent (>1 supports the belief, <1 weakens it). The agent presents this as: 'This evidence [supports/weakens] your case. Your confidence in [belief] goes from X% to Y%'.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "description": "Category of evidence.", "$comment": "E.g., 'customer_conversation', 'market_research', 'competitor_analysis', 'pilot_test', 'domain_expertise'." },
+                  "description": { "type": "string", "maxLength": 300, "description": "What the evidence is." },
+                  "affects_belief": { "type": "string", "enum": ["market_exists", "can_reach_customers", "can_achieve_profitability"], "description": "Which prior belief this evidence updates." },
+                  "likelihood_ratio": { "type": "number", "minimum": 0, "description": "How strongly this evidence supports (>1) or weakens (<1) the belief.", "$comment": "Set by the agent internally. The user sees the percentage change in confidence, not this number. 2.0 means the evidence makes the belief twice as likely. 0.5 means half as likely." },
+                  "confidence": { "type": "string", "enum": ["low", "medium", "high"], "description": "How reliable is this evidence.", "$comment": "low: anecdotal, single observation. medium: multiple observations, some data. high: systematic data, multiple confirming sources." }
+                },
+                "required": ["type", "description", "affects_belief", "likelihood_ratio", "confidence"]
+              }
+            },
+            "posterior_beliefs": {
+              "type": "object",
+              "description": "Updated beliefs after incorporating all evidence.",
+              "$comment": "Calculated: P_posterior = P_prior × Π(likelihood_ratios) for each belief, then normalized to [0,1]. The agent presents the change: 'After analyzing your evidence, confidence in [belief] went from X% to Y%'.",
+              "properties": {
+                "market_exists": { "type": "number", "minimum": 0, "maximum": 1 },
+                "can_reach_customers": { "type": "number", "minimum": 0, "maximum": 1 },
+                "can_achieve_profitability": { "type": "number", "minimum": 0, "maximum": 1 }
+              },
+              "required": ["market_exists", "can_reach_customers", "can_achieve_profitability"]
+            },
+            "next_evidence_to_gather": {
+              "type": "array",
+              "description": "Most valuable evidence the user should collect next.",
+              "$comment": "Ordered by expected information value. The agent explains: 'If you could get 5 paying pilot customers in the next 4 weeks, your confidence in reaching your target would jump from 55% to 85%'. These feed into next_steps.recommended_actions.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "evidence_needed": { "type": "string", "maxLength": 200, "description": "What evidence to collect." },
+                  "affects_belief": { "type": "string", "enum": ["market_exists", "can_reach_customers", "can_achieve_profitability"] },
+                  "expected_impact": { "type": "string", "maxLength": 200, "description": "How this evidence would change the confidence level.", "$comment": "E.g., 'Would raise confidence in customer reach from 55% to ~85%'." },
+                  "how_to_collect": { "type": "string", "maxLength": 200, "description": "Concrete steps to gather this evidence." }
+                },
+                "required": ["evidence_needed", "affects_belief", "expected_impact", "how_to_collect"]
+              }
+            }
+          },
+          "required": ["prior_beliefs", "evidence", "posterior_beliefs", "next_evidence_to_gather"]
+        },
+        "critical_assumptions": {
+          "type": "array",
+          "description": "Assumptions that must hold true for this scenario to work.",
+          "$comment": "If any of these assumptions prove false, the scenario is invalidated. Each assumption should be testable.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "assumption": { "type": "string", "maxLength": 200, "description": "The assumption." },
+              "how_to_validate": { "type": "string", "maxLength": 200, "description": "How to test whether this assumption holds." },
+              "risk_if_wrong": { "type": "string", "maxLength": 200, "description": "What happens if this assumption is false." }
+            },
+            "required": ["assumption", "how_to_validate", "risk_if_wrong"]
+          }
+        },
+        "kill_criteria": {
+          "type": "array",
+          "description": "Clear signals that the project should be abandoned or pivoted.",
+          "$comment": "The agent defines these based on runway, revenue targets, and Monte Carlo results. These are not opinions — they are measurable thresholds. E.g., 'If revenue is below $2,000/month by month 4, pivot or abandon'. The user agrees to these upfront.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterion": { "type": "string", "maxLength": 200, "description": "The kill criterion.", "$comment": "A specific, measurable threshold. E.g., 'Revenue below $2,000/month by month 4'." },
+              "action": { "type": "string", "enum": ["pivot", "abandon", "review"], "description": "What to do if the criterion is met." },
+              "reasoning": { "type": "string", "maxLength": 200, "description": "Why this threshold matters.", "$comment": "Connected to runway, survival target, or critical assumptions." }
+            },
+            "required": ["criterion", "action", "reasoning"]
+          }
+        }
+      },
+      "required": ["scenario_id", "scenario_name", "base_assumptions", "monte_carlo", "bayesian_analysis", "critical_assumptions", "kill_criteria"]
+    }
+  }
+}

@@ -1,0 +1,627 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Product Foundation Schema",
+  "description": "Consolidated foundation document that compacts feasibility analysis outputs into a structured base from which the product blueprint is generated. Answers: WHAT DID WE LEARN? and WHAT DO WE BUILD FROM? Sits between feasibility (CAN WE?) and blueprint (WHAT/WHY) in the artifact hierarchy: feasibility → foundation → blueprint → roadmap → logbook.",
+  "$comment": "One per product. This is the compaction point — everything the feasibility analysis discovered gets distilled here into validated facts, not hypotheses. The feasibility may contain 3 scenarios, 10,000 Monte Carlo simulations, and dozens of iterations. The foundation extracts the surviving conclusions. The blueprint-create command consumes this document as its primary input, avoiding re-reading the entire feasibility. Think of it as: feasibility is the research lab, foundation is the executive brief, blueprint is the architectural plan.",
+  "type": "object",
+  "properties": {
+    "meta": {
+      "type": "object",
+      "description": "Foundation identity, source traceability, and versioning.",
+      "$comment": "Links back to the feasibility analysis that produced this foundation. The foundation is generated once and updated only if the feasibility is re-run with significant changes.",
+      "properties": {
+        "product_name": {
+          "type": "string",
+          "description": "Product name as established during feasibility.",
+          "$comment": "Carries forward to blueprint.meta.product_name. Must be consistent across all artifacts."
+        },
+        "foundation_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "description": "Schema version for forward compatibility.",
+          "$comment": "Current: '1.0'. Increment minor for additive changes, major for breaking changes."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when this foundation was created. Immutable.",
+          "$comment": "Set once at creation. Never modify."
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp of last modification.",
+          "$comment": "Update on every write operation to this file."
+        },
+        "source_feasibility": {
+          "type": "string",
+          "description": "Filename of the feasibility analysis that produced this foundation.",
+          "$comment": "E.g., 'exobase_feasibility.json'. The agent can re-read this file if deeper context is needed during blueprint creation."
+        },
+        "feasibility_confidence": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Confidence level from the feasibility analysis at the time this foundation was generated.",
+          "$comment": "Copied from feasibility.next_steps.confidence_level. Affects blueprint scope: low = conservative scope with emphasis on learning, medium = balanced scope, high = full ambition."
+        },
+        "feasibility_iteration_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many pivot/refinement iterations the feasibility went through before this foundation was generated.",
+          "$comment": "Higher counts indicate more refined analysis. Copied from feasibility.meta.iteration_count."
+        }
+      },
+      "required": ["product_name", "foundation_version", "created_at", "last_updated", "source_feasibility", "feasibility_confidence"]
+    },
+
+    "validated_problem": {
+      "type": "object",
+      "description": "The problem statement enriched with market evidence from the feasibility analysis.",
+      "$comment": "This is NOT a copy of feasibility.idea_profile.problem_statement. It is an ENRICHED version that incorporates market_analysis data, competitor gaps, and buyer persona pain points into a stronger, evidence-backed problem definition. The blueprint consumes this directly as its problem section with minimal transformation.",
+      "properties": {
+        "pain": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "What pain exists? Consolidated from feasibility idea_profile + buyer persona pain points.",
+          "$comment": "Merge: feasibility.idea_profile.problem_statement.pain + most common pain_points from buyer_personas. The result should be specific, observable, and backed by persona evidence. A reader should feel the problem."
+        },
+        "reality": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Why is this pain real? Evidence from market analysis, TAM/SAM/SOM, and Bayesian posteriors.",
+          "$comment": "Merge: feasibility.idea_profile.problem_statement.reality + market_analysis.tam/sam/som data + bayesian posterior for market_exists. Include frequency, impact, and scale evidence."
+        },
+        "unsolved": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Why hasn't this been solved? Competitor gap analysis from market research.",
+          "$comment": "Merge: feasibility.idea_profile.problem_statement.unsolved + market_analysis.competitors[].gap + market_analysis.market_gap. Identify specific failures of existing solutions."
+        },
+        "evidence_strength": {
+          "type": "string",
+          "enum": ["anecdotal", "observed", "measured", "validated"],
+          "description": "How strong is the evidence supporting this problem?",
+          "$comment": "anecdotal: founder's intuition only. observed: talked to potential users. measured: quantitative data from market analysis. validated: paying customers or pre-sales confirm the problem. Derived from bayesian evidence quality."
+        }
+      },
+      "required": ["pain", "reality", "unsolved", "evidence_strength"]
+    },
+
+    "target_users": {
+      "type": "array",
+      "description": "Concrete user profiles distilled from feasibility buyer personas.",
+      "$comment": "Each entry is a narrative description of a REAL person with REAL problems — converted from the structured buyer_persona format into the narrative format the blueprint expects. Include willingness_to_pay as evidence of problem severity. The blueprint consumes these directly as target_users.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Sequential identifier.",
+            "$comment": "1, 2, 3... Matches order of importance. Referenced by capabilities and flows."
+          },
+          "persona_source": {
+            "type": "string",
+            "description": "Name of the buyer persona from feasibility this was derived from.",
+            "$comment": "E.g., 'Miguel, maestro de obras'. Traceability back to feasibility.buyer_personas[].name."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Narrative description of this user — who they are, what problem they face, how they survive today.",
+            "$comment": "Synthesize from buyer_persona: occupation + pain_points + current_solution + decision_triggers. Write as if pointing at someone: 'That person, with that problem'. Must connect back to validated_problem."
+          },
+          "willingness_to_pay": {
+            "type": "string",
+            "description": "How much this user would pay and under what conditions.",
+            "$comment": "From feasibility.buyer_personas[].willingness_to_pay. Carries to blueprint as evidence of problem severity and revenue feasibility."
+          },
+          "primary_acquisition_channel": {
+            "type": "string",
+            "description": "Most likely channel to reach this user.",
+            "$comment": "From feasibility.buyer_personas[].acquisition_channel. Informs marketing strategy and roadmap sequencing."
+          }
+        },
+        "required": ["id", "persona_source", "description", "willingness_to_pay", "primary_acquisition_channel"]
+      },
+      "minItems": 1
+    },
+
+    "competitive_landscape": {
+      "type": "object",
+      "description": "Consolidated competitive intelligence from the feasibility market analysis.",
+      "$comment": "Compacts feasibility.market_analysis into actionable competitive context. The blueprint uses this to inform design_principles and out_of_scope decisions.",
+      "properties": {
+        "market_size": {
+          "type": "object",
+          "description": "TAM/SAM/SOM summary.",
+          "$comment": "Compacted from feasibility.market_analysis. Only include if data was available during feasibility.",
+          "properties": {
+            "tam": { "type": "string", "description": "Total addressable market.", "$comment": "Value + unit + source. E.g., '$2.4B annual, US residential construction management (IBISWorld 2025)'." },
+            "sam": { "type": "string", "description": "Serviceable addressable market.", "$comment": "The slice TAM that the product can realistically target." },
+            "som": { "type": "string", "description": "Serviceable obtainable market.", "$comment": "The slice of SAM achievable in the timeline. Most relevant for Monte Carlo validation." }
+          }
+        },
+        "competitors": {
+          "type": "array",
+          "description": "Key competitors with their specific gaps.",
+          "$comment": "Top 3-5 competitors from feasibility.market_analysis.competitors. Focus on the gap field — this is what the product exploits.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "Competitor name." },
+              "positioning": { "type": "string", "description": "How they position themselves." },
+              "pricing": { "type": "string", "description": "Their pricing model/range." },
+              "gap": { "type": "string", "description": "Specific gap this product can exploit.", "$comment": "This is the most important field. Each gap is a potential design_principle or capability differentiator." }
+            },
+            "required": ["name", "gap"]
+          }
+        },
+        "market_gap_summary": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "One-paragraph synthesis of the overall market opportunity.",
+          "$comment": "From feasibility.market_analysis.market_gap. The whitespace this product occupies."
+        },
+        "unfair_advantages": {
+          "type": "array",
+          "description": "Founder/team advantages that are hard to replicate.",
+          "$comment": "From feasibility.market_analysis.unfair_advantages + feasibility.idea_profile.founder_advantage. These inform blueprint design_principles.",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["market_gap_summary", "unfair_advantages"]
+    },
+
+    "validated_revenue_model": {
+      "type": "object",
+      "description": "The revenue model that survived feasibility analysis — the one with the best Monte Carlo and Bayesian results.",
+      "$comment": "If feasibility had multiple scenarios, this captures the WINNING scenario — the one with highest probability of hitting revenue targets. If the user pivoted during feasibility, this reflects the final iteration. The blueprint uses this to derive success_metrics and validate the product_hypothesis.",
+      "properties": {
+        "model_type": {
+          "type": "string",
+          "description": "Business model type.",
+          "$comment": "From feasibility.revenue_model.model_type. E.g., 'marketplace', 'subscription', 'hybrid'."
+        },
+        "revenue_streams": {
+          "type": "array",
+          "description": "Validated revenue streams with unit economics.",
+          "$comment": "From feasibility.revenue_model.streams. Each stream should have survived Monte Carlo validation — streams with negligible revenue impact should be noted but may be deferred.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "Stream identifier.", "$comment": "E.g., 'Marketplace commission', 'SaaS subscription', 'Payment processing'." },
+              "description": { "type": "string", "description": "What this stream is and how it generates revenue." },
+              "pricing": { "type": "string", "description": "Pricing structure.", "$comment": "E.g., '5% commission per transaction', '$29/mo per contractor'." },
+              "unit_economics": {
+                "type": "object",
+                "description": "Per-unit cost and revenue.",
+                "$comment": "From feasibility.revenue_model.streams[].unit_economics. These feed directly into Monte Carlo validation.",
+                "properties": {
+                  "revenue_per_unit": { "type": "string", "description": "Revenue per transaction/user/period." },
+                  "cost_per_unit": { "type": "string", "description": "Variable cost per transaction/user/period." },
+                  "margin": { "type": "string", "description": "Gross margin per unit." }
+                }
+              },
+              "revenue_share_percent": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "Estimated percentage of total revenue from this stream at steady state.",
+                "$comment": "From Monte Carlo month_by_month stream breakdown at the final month. Helps blueprint prioritize capabilities."
+              },
+              "capabilities_required": {
+                "type": "array",
+                "description": "Which essential capabilities this stream depends on.",
+                "$comment": "Cross-reference to essential_capabilities[].id. A capability blocking this stream is by definition revenue_blocking.",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["name", "description", "pricing"]
+          },
+          "minItems": 1
+        },
+        "pricing_tiers": {
+          "type": "array",
+          "description": "Pricing tiers if applicable.",
+          "$comment": "From feasibility.revenue_model.pricing_tiers. Informs blueprint capability classification (which capabilities belong to which tier).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tier_name": { "type": "string" },
+              "price": { "type": "string" },
+              "includes": { "type": "string", "description": "What this tier includes." },
+              "target_persona": { "type": "string", "description": "Which target_user this tier is designed for." }
+            },
+            "required": ["tier_name", "price", "includes"]
+          }
+        },
+        "flywheel": {
+          "type": "string",
+          "description": "How revenue streams reinforce each other.",
+          "$comment": "From feasibility.revenue_model.flywheel_description. Informs blueprint design_principles about growth mechanics."
+        }
+      },
+      "required": ["model_type", "revenue_streams"]
+    },
+
+    "financial_benchmarks": {
+      "type": "object",
+      "description": "Key financial numbers from Monte Carlo and Bayesian analysis that survived as planning benchmarks.",
+      "$comment": "This is the COMPACTED output of potentially thousands of simulations. Only the numbers that matter for blueprint and roadmap decisions are preserved here. The full simulation data remains in the feasibility file for reference.",
+      "properties": {
+        "revenue_targets": {
+          "type": "object",
+          "description": "User's revenue targets from feasibility.",
+          "$comment": "Copied directly from feasibility.revenue_targets. These become blueprint success_metrics thresholds.",
+          "properties": {
+            "survival_monthly": { "type": "number", "description": "Minimum monthly revenue to survive.", "$comment": "Blueprint failure_signal threshold." },
+            "intermediate_monthly": { "type": "number", "description": "Monthly revenue for expenses covered.", "$comment": "Blueprint intermediate success_signal." },
+            "comfortable_monthly": { "type": "number", "description": "Monthly revenue target.", "$comment": "Blueprint primary success_signal." },
+            "timeline_months": { "type": "integer", "description": "Months to achieve targets.", "$comment": "Constrains roadmap phase durations." }
+          },
+          "required": ["survival_monthly", "comfortable_monthly", "timeline_months"]
+        },
+        "monte_carlo_summary": {
+          "type": "object",
+          "description": "Key Monte Carlo results from the winning scenario.",
+          "$comment": "Compacted from the best feasibility.revenue_projections[].monte_carlo.results. Only the decision-relevant numbers.",
+          "properties": {
+            "scenario_name": { "type": "string", "description": "Name of the winning scenario.", "$comment": "Traceability to feasibility.revenue_projections[].scenario_name." },
+            "n_simulations": { "type": "integer", "description": "Number of simulations run." },
+            "probability_survival_6mo": { "type": "number", "description": "P(revenue ≥ survival target) at 6 months.", "$comment": "Key go/no-go metric." },
+            "probability_comfortable_12mo": { "type": "number", "description": "P(revenue ≥ comfortable target) at 12 months.", "$comment": "Key ambition metric." },
+            "median_mrr_6mo": { "type": "number", "description": "Median monthly recurring revenue at 6 months." },
+            "median_mrr_12mo": { "type": "number", "description": "Median monthly recurring revenue at 12 months." },
+            "top_sensitivity_variables": {
+              "type": "array",
+              "description": "Top 3 variables that most affect revenue outcomes.",
+              "$comment": "From monte_carlo.results.sensitivity_analysis. These become blueprint design_principles ('we must optimize X because it has the highest impact on revenue').",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "variable": { "type": "string", "description": "Variable name in natural language.", "$comment": "E.g., 'Monthly client acquisition rate', not 'monthly_acquisition_rate'." },
+                  "impact": { "type": "string", "enum": ["high", "medium", "low"], "description": "Sensitivity level." },
+                  "actionable_insight": { "type": "string", "description": "What the team can do to improve this variable.", "$comment": "E.g., 'If acquisition improves from 5 to 8 clients/month, P(survival) jumps from 62% to 89%'." }
+                },
+                "required": ["variable", "impact", "actionable_insight"]
+              },
+              "maxItems": 5
+            }
+          },
+          "required": ["scenario_name", "n_simulations", "probability_survival_6mo", "median_mrr_6mo"]
+        },
+        "bayesian_summary": {
+          "type": "object",
+          "description": "Posterior beliefs after all evidence from the feasibility analysis.",
+          "$comment": "Compacted from the best scenario's bayesian_analysis.posterior_beliefs. These posteriors represent the team's calibrated confidence after the full feasibility process.",
+          "properties": {
+            "market_exists": { "type": "number", "minimum": 0, "maximum": 1, "description": "Posterior probability that the target market exists and is accessible.", "$comment": "If < 0.5, the blueprint should be conservative in scope." },
+            "can_reach_customers": { "type": "number", "minimum": 0, "maximum": 1, "description": "Posterior probability of reaching the target customer count.", "$comment": "Affects roadmap timeline aggressiveness." },
+            "can_achieve_profitability": { "type": "number", "minimum": 0, "maximum": 1, "description": "Posterior probability of achieving profitable operations.", "$comment": "If < 0.5, the blueprint should include explicit learning/validation capabilities." },
+            "highest_risk": {
+              "type": "string",
+              "description": "The belief with the lowest posterior — the biggest remaining risk.",
+              "$comment": "E.g., 'can_reach_customers (0.45) — acquisition channel assumptions need validation'. This directly becomes a blueprint open_question."
+            }
+          },
+          "required": ["market_exists", "can_reach_customers", "can_achieve_profitability", "highest_risk"]
+        },
+        "cost_structure": {
+          "type": "object",
+          "description": "Monthly cost baseline from user resources and revenue model.",
+          "$comment": "From feasibility.user_resources.financial_capacity. Critical for kill_criteria and blueprint success_metrics.",
+          "properties": {
+            "fixed_monthly_costs": { "type": "number", "description": "Total fixed monthly costs (personal + business)." },
+            "runway_months": { "type": "integer", "description": "Months the founder can operate without revenue.", "$comment": "From feasibility.user_resources.runway_months. Constrains MVP timeline." },
+            "initial_investment_available": { "type": "number", "description": "One-time investment capacity." },
+            "burn_rate_estimate": { "type": "string", "description": "Estimated monthly burn including development costs.", "$comment": "Helps blueprint time_to_mvp_weeks validation — if burn × weeks exceeds investment, scope must shrink." }
+          },
+          "required": ["fixed_monthly_costs", "runway_months"]
+        },
+        "kill_criteria": {
+          "type": "array",
+          "description": "Signals that the project should pivot or stop.",
+          "$comment": "From feasibility.revenue_projections[].kill_criteria for the winning scenario. The blueprint should include at least one success_metric with a failure_signal for each kill criterion.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterion": { "type": "string", "description": "What triggers the kill/pivot decision.", "$comment": "E.g., 'Less than 3 paying customers after 3 months of launch'." },
+              "action": { "type": "string", "description": "What to do if triggered.", "$comment": "E.g., 'Pivot to B2C model' or 'Shut down and preserve remaining runway'." },
+              "timeline": { "type": "string", "description": "When to evaluate this criterion.", "$comment": "E.g., '3 months post-launch', 'End of Phase 1'." }
+            },
+            "required": ["criterion", "action", "timeline"]
+          },
+          "minItems": 1
+        }
+      },
+      "required": ["revenue_targets", "monte_carlo_summary", "bayesian_summary", "cost_structure", "kill_criteria"]
+    },
+
+    "swot_analysis": {
+      "type": "object",
+      "description": "SWOT synthesis derived from all feasibility sections.",
+      "$comment": "This is NOT a section that exists in the feasibility schema — it is SYNTHESIZED here by the foundation-create command from: strengths (founder_advantage + unfair_advantages), weaknesses (constraints + low posteriors), opportunities (market_gap + proactive_suggestions), threats (competitors + kill_criteria). The blueprint uses this to inform design_principles and out_of_scope.",
+      "properties": {
+        "strengths": {
+          "type": "array",
+          "description": "Internal advantages the product/team has.",
+          "$comment": "From: feasibility.idea_profile.founder_advantage + market_analysis.unfair_advantages + user_resources.skills with high relevance.",
+          "items": { "type": "string" }
+        },
+        "weaknesses": {
+          "type": "array",
+          "description": "Internal limitations that could hinder success.",
+          "$comment": "From: feasibility.user_resources.constraints + bayesian beliefs with low posteriors + sensitivity variables with high impact that are hard to control.",
+          "items": { "type": "string" }
+        },
+        "opportunities": {
+          "type": "array",
+          "description": "External factors that could accelerate success.",
+          "$comment": "From: feasibility.market_analysis.market_gap + proactive_suggestions.positioning_angles + proactive_suggestions.partnership_opportunities + why_now timing factors.",
+          "items": { "type": "string" }
+        },
+        "threats": {
+          "type": "array",
+          "description": "External factors that could prevent success.",
+          "$comment": "From: feasibility.market_analysis.competitors (those with small gaps) + kill_criteria triggers + critical_assumptions that could fail.",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["strengths", "weaknesses", "opportunities", "threats"]
+    },
+
+    "essential_capabilities": {
+      "type": "array",
+      "description": "Validated essential capabilities — the minimum set to generate revenue and solve the problem.",
+      "$comment": "Transformed from feasibility.essential_capabilities_draft. Key transformations: (1) Re-classified from revenue-impact (blocking/enabling/expansion) to operational criticality (essential/important/desired) using the blueprint test: 'without this, product cannot exist, problem unsolved, hypothesis fails'. (2) Rewritten in 'The user can [action]' format. (3) Ordered by dependency with explicit depends_on. (4) Each capability is tagged with which revenue_stream it enables. Revenue_blocking items from feasibility are the primary candidates, but each must pass the blueprint test independently.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique capability identifier.",
+            "$comment": "Format: 'CAP-001', 'CAP-002'. Sequential. Referenced by flows, streams, and blueprint."
+          },
+          "content": {
+            "type": "string",
+            "description": "What the user can do.",
+            "$comment": "Format: 'The user can [specific action]'. Natural language, no technical specifications. From feasibility.essential_capabilities_draft.core_capabilities[].capability, rewritten."
+          },
+          "classification": {
+            "type": "string",
+            "enum": ["essential", "important", "desired"],
+            "description": "Criticality level after re-evaluation.",
+            "$comment": "essential: product fails without this (maps mostly from revenue_blocking). important: hurts to operate without (maps mostly from revenue_enabling). desired: nice to have (maps mostly from usage_expansion). But this is NOT automatic — each capability is re-evaluated against the blueprint's stricter definition."
+          },
+          "revenue_streams": {
+            "type": "array",
+            "description": "Which revenue streams this capability enables.",
+            "$comment": "Cross-reference to validated_revenue_model.revenue_streams[].name. A capability blocking a major stream is almost certainly essential.",
+            "items": { "type": "string" }
+          },
+          "depends_on": {
+            "type": "array",
+            "description": "IDs of capabilities this one depends on.",
+            "$comment": "E.g., ['CAP-001'] means this capability requires CAP-001 to function. Determines build order in roadmap.",
+            "items": { "type": "string" }
+          },
+          "build_effort_days": {
+            "type": "integer",
+            "description": "Estimated build effort in days.",
+            "$comment": "From feasibility.essential_capabilities_draft.core_capabilities[].build_effort_days. Informs roadmap phase planning."
+          },
+          "feasibility_source": {
+            "type": "string",
+            "description": "Original classification from feasibility.",
+            "$comment": "E.g., 'revenue_blocking', 'revenue_enabling', 'usage_expansion'. Preserved for traceability."
+          }
+        },
+        "required": ["id", "content", "classification", "revenue_streams"]
+      },
+      "minItems": 1
+    },
+
+    "essential_flows_draft": {
+      "type": "array",
+      "description": "Core user flows that exercise essential capabilities — expanded from feasibility's minimal flow sketches.",
+      "$comment": "From feasibility.essential_capabilities_draft.essential_flows_draft, but EXPANDED with entry_point, termination, and step-by-step description. The blueprint will further refine these into full essential_flows_and_views with views and system_flows. This is the intermediate expansion point.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "flow_name": {
+            "type": "string",
+            "description": "Descriptive name of the user flow.",
+            "$comment": "E.g., 'Project publication flow', 'Contractor bidding flow'."
+          },
+          "description": {
+            "type": "string",
+            "description": "What this flow achieves for the user.",
+            "$comment": "One sentence explaining the flow's purpose from the user's perspective."
+          },
+          "entry_point": {
+            "type": "string",
+            "description": "Where/how the user enters this flow.",
+            "$comment": "E.g., 'User taps \"New Project\" from dashboard'. Defines the starting state."
+          },
+          "termination": {
+            "type": "string",
+            "description": "What marks the flow as complete.",
+            "$comment": "E.g., 'Project is published and visible to contractors'. Defines the success state."
+          },
+          "capability_refs": {
+            "type": "array",
+            "description": "Which essential capabilities this flow exercises.",
+            "$comment": "Cross-reference to essential_capabilities[].id. Every essential capability should appear in at least one flow.",
+            "items": { "type": "string" }
+          },
+          "revenue_connection": {
+            "type": "string",
+            "description": "How this flow connects to revenue generation.",
+            "$comment": "From feasibility.essential_flows_draft[].revenue_connection. E.g., 'This flow triggers the marketplace commission when a bid is accepted'."
+          }
+        },
+        "required": ["flow_name", "description", "entry_point", "termination", "capability_refs"]
+      }
+    },
+
+    "timeline_constraints": {
+      "type": "object",
+      "description": "Time-based constraints that affect blueprint scope and roadmap planning.",
+      "$comment": "Consolidates timeline data from feasibility: time_to_mvp, time_to_first_revenue, runway, and user's available hours. The blueprint uses these to validate that the scope is achievable.",
+      "properties": {
+        "time_to_mvp_weeks": {
+          "type": "integer",
+          "description": "Estimated weeks to minimum viable product.",
+          "$comment": "From feasibility.essential_capabilities_draft.time_to_mvp_weeks. Blueprint must ensure essential_capabilities scope fits within this estimate."
+        },
+        "time_to_first_revenue_weeks": {
+          "type": "integer",
+          "description": "Estimated weeks to first revenue.",
+          "$comment": "From feasibility.essential_capabilities_draft.time_to_first_revenue_weeks. Must be ≤ runway_months × 4.3 weeks. If not, scope must shrink."
+        },
+        "available_hours_weekly": {
+          "type": "number",
+          "description": "Founder's available hours per week.",
+          "$comment": "From feasibility.user_resources.time_weekly_hours. Constrains roadmap sprint velocity."
+        },
+        "runway_deadline": {
+          "type": "string",
+          "description": "Hard deadline — when runway runs out.",
+          "$comment": "Calculated: created_at + runway_months. Everything must be achievable before this date."
+        },
+        "scope_feasibility_check": {
+          "type": "string",
+          "description": "Agent's assessment of whether the essential capabilities fit within timeline constraints.",
+          "$comment": "E.g., 'Essential capabilities require ~45 dev-days at 20hr/week = ~18 weeks. Runway is 26 weeks. FEASIBLE with 8-week buffer.' or 'TIGHT — consider reducing scope by deferring CAP-005 and CAP-006 to post-launch'."
+        }
+      },
+      "required": ["time_to_mvp_weeks", "time_to_first_revenue_weeks", "available_hours_weekly"]
+    },
+
+    "proactive_insights": {
+      "type": "object",
+      "description": "Agent-generated insights and suggestions from the feasibility analysis that should inform blueprint decisions.",
+      "$comment": "Compacted from feasibility.proactive_suggestions. Only the suggestions that survived analysis and are relevant for the blueprint. The blueprint-create command can present these as options during design_principles and capability definition.",
+      "properties": {
+        "positioning_recommendation": {
+          "type": "string",
+          "description": "Recommended market positioning based on competitive analysis.",
+          "$comment": "From the best feasibility.proactive_suggestions.positioning_angles[]. Informs blueprint vision and design_principles."
+        },
+        "differentiation_ideas": {
+          "type": "array",
+          "description": "Feature/capability ideas that differentiate from competitors.",
+          "$comment": "From feasibility.proactive_suggestions.capability_ideas[]. The blueprint-create command can present these when defining non_essential_capabilities.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "idea": { "type": "string" },
+              "differentiator": { "type": "string" },
+              "impact": { "type": "string", "enum": ["high", "medium", "low"] },
+              "complexity": { "type": "string", "enum": ["high", "medium", "low"] }
+            },
+            "required": ["idea", "differentiator", "impact"]
+          }
+        },
+        "marketing_strategies": {
+          "type": "array",
+          "description": "Recommended marketing strategies with effort and ROI estimates.",
+          "$comment": "From feasibility.proactive_suggestions.marketing_strategies[]. Informs roadmap phase planning.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "strategy": { "type": "string" },
+              "effort": { "type": "string", "enum": ["high", "medium", "low"] },
+              "expected_roi": { "type": "string" },
+              "timeline": { "type": "string" }
+            },
+            "required": ["strategy", "effort"]
+          }
+        },
+        "partnership_opportunities": {
+          "type": "array",
+          "description": "Potential partnerships identified during feasibility.",
+          "$comment": "From feasibility.proactive_suggestions.partnership_opportunities[]. Can inform blueprint design_principles about integration priorities.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "remaining_unknowns": {
+      "type": "array",
+      "description": "Unresolved questions and risks that the blueprint must address or acknowledge.",
+      "$comment": "From feasibility.next_steps.remaining_unknowns + bayesian next_evidence_to_gather. Each unknown becomes either a blueprint open_question or a product_decision to be made during blueprint creation. The foundation explicitly surfaces these so the blueprint-create command knows what to ask the product owner.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "unknown": {
+            "type": "string",
+            "description": "What is still unknown.",
+            "$comment": "E.g., 'Optimal pricing for contractor tier', 'Whether homeowners will use the platform directly'."
+          },
+          "impact": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "How much this unknown affects blueprint decisions.",
+            "$comment": "high: blocks a design_principle or essential_capability decision. medium: affects non_essential scope. low: nice to know, can proceed without."
+          },
+          "recommended_resolution": {
+            "type": "string",
+            "description": "How to resolve this unknown.",
+            "$comment": "E.g., 'Run 2-week pricing experiment with 10 beta users', 'Add as open_question in blueprint and decide during Phase 1'."
+          },
+          "source": {
+            "type": "string",
+            "description": "Where this unknown originated.",
+            "$comment": "E.g., 'bayesian next_evidence_to_gather', 'Monte Carlo sensitivity analysis', 'iteration_history pivot rationale'."
+          }
+        },
+        "required": ["unknown", "impact", "recommended_resolution"]
+      }
+    },
+
+    "blueprint_readiness": {
+      "type": "object",
+      "description": "Final assessment of whether the product is ready for blueprint creation.",
+      "$comment": "The gate between foundation and blueprint. If ready is false, the agent should recommend going back to feasibility before proceeding. The blueprint-create command checks this field first.",
+      "properties": {
+        "ready": {
+          "type": "boolean",
+          "description": "Whether the product is ready for blueprint creation.",
+          "$comment": "From feasibility.next_steps.readiness_for_blueprint. True means: problem validated, revenue model tested, essential capabilities identified, confidence ≥ medium."
+        },
+        "confidence_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Overall confidence in the product foundation.",
+          "$comment": "Copied from meta.feasibility_confidence. Affects blueprint scope: low = conservative, medium = balanced, high = ambitious."
+        },
+        "blocking_issues": {
+          "type": "array",
+          "description": "Issues that must be resolved before blueprint creation.",
+          "$comment": "Empty if ready is true. If ready is false, lists specific actions needed.",
+          "items": { "type": "string" }
+        },
+        "recommended_next_step": {
+          "type": "string",
+          "description": "What to do next.",
+          "$comment": "If ready: 'Run /waves:product-blueprint-create with this foundation as input'. If not ready: specific action like 'Return to feasibility and run scenario with adjusted pricing'."
+        }
+      },
+      "required": ["ready", "confidence_level", "recommended_next_step"]
+    }
+  },
+
+  "required": [
+    "meta",
+    "validated_problem",
+    "target_users",
+    "competitive_landscape",
+    "validated_revenue_model",
+    "financial_benchmarks",
+    "swot_analysis",
+    "essential_capabilities",
+    "timeline_constraints",
+    "blueprint_readiness"
+  ]
+}

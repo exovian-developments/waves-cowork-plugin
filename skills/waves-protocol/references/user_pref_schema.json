@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exovian.dev/schemas/user_pref.schema.json",
+  "title": "User Interaction Preferences for LLMs",
+  "type": "object",
+  "required": ["version", "llm_guidance", "user_profile", "output_preferences", "project_context"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "$comment": "Basic semantic format: major.minor"
+    },
+    "llm_guidance": {
+      "type": "object",
+      "required": [
+        "explain_before_answering",
+        "ask_before_assuming",
+        "suggest_multiple_options",
+        "allow_self_correction",
+        "persistent_personality",
+        "feedback_loop_enabled"
+      ],
+      "properties": {
+        "explain_before_answering": { "type": "boolean" },
+        "ask_before_assuming": { "type": "boolean" },
+        "suggest_multiple_options": { "type": "boolean" },
+        "allow_self_correction": { "type": "boolean" },
+        "persistent_personality": { "type": "boolean" },
+        "feedback_loop_enabled": { "type": "boolean" }
+      }
+    },
+    "user_profile": {
+      "type": "object",
+      "required": [
+        "name",
+        "communication_tone",
+        "emoji_usage",
+        "preferred_language",
+        "technical_background",
+        "explanation_style",
+        "learning_style"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "$comment": "User name. Open value."
+        },
+        "communication_tone": {
+          "type": "string",
+          "enum": [
+            "formal",
+            "neutral",
+            "friendly",
+            "friendly_with_sarcasm",
+            "funny",
+            "strict"
+          ]
+        },
+        "emoji_usage": { "type": "boolean" },
+        "preferred_language": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+          "$comment": "Example: es, en, es-CR. ISO 639-1 + optional region."
+        },
+        "technical_background": {
+          "type": "string",
+          "$comment": "Describe the technical experience and knowledge of the user. Open value."
+        },
+        "explanation_style": {
+  "type": "string",
+  "enum": [
+    "direct answer: short, no details",
+    "explained: general reasoning, no technical depth",
+    "explained with relevant technical details",
+    "teaching mode: explain every technical detail step by step"
+  ]
+},
+        "learning_style": {
+          "type": "string",
+          "enum": ["explicative", "visual", "direct"]
+        }
+      }
+    },
+    "output_preferences": {
+      "type": "object",
+      "required": [
+        "format_code_with_comments",
+        "block_comment_tags",
+        "code_language",
+        "use_inline_explanations",
+        "highlight_gotchas",
+        "response_structure"
+      ],
+      "properties": {
+        "format_code_with_comments": { "type": "boolean" },
+        "block_comment_tags": {
+          "type": "object",
+          "required": ["start", "end"],
+          "properties": {
+            "start": { "type": "string" },
+            "end": { "type": "string" }
+          }
+        },
+        "code_language": {
+          "type": "string",
+          "$comment": "Name of the language expected by the user (Example: Java, Dart, TypeScript, Python)"
+        },
+        "use_inline_explanations": { "type": "boolean" },
+        "highlight_gotchas": { "type": "boolean" },
+        "response_structure": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["explanation", "options_if_applicable", "code_or_solution", "summary_or_next_step"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "project_context": {
+      "type": "object",
+      "description": "Context about the project type and user familiarity. Determines which schemas and flows to use.",
+      "$comment": "Set during /waves:project-init. Used by other commands to select appropriate flows (e.g., software vs general logbook schema).",
+      "required": ["project_type", "is_project_known_by_user", "is_project_from_scratch"],
+      "properties": {
+        "project_type": {
+          "type": "string",
+          "enum": ["software", "general"],
+          "description": "Type of project: software (code-based) or general (academic, creative, business, other).",
+          "$comment": "Determines which schemas to use. Software uses logbook_software_schema.json, general uses logbook_general_schema.json."
+        },
+        "is_project_known_by_user": {
+          "type": "boolean",
+          "description": "Whether the user is familiar with the project structure, topics, features and technologies.",
+          "$comment": "If false, commands provide more exploratory/educational output. If true, commands assume user knows the context."
+        },
+        "is_project_from_scratch": {
+          "type": "boolean",
+          "description": "Indicates if the project is being started from scratch (no existing codebase or other resources).",
+          "$comment": "Ask during /waves:project-init whether the project is new or existing. This flag adjusts CLI agent perspective for manifest and rules flows."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "waves",
+  "version": "1.3.1",
+  "description": "Product development framework for the AI agent era. Complete lifecycle: feasibility analysis with Monte Carlo/Bayesian projections, product foundation, blueprint creation, roadmaps, logbooks, and multi-session continuity. Replaces Scrum/Kanban with organic delivery cycles called waves.",
+  "author": {
+    "name": "Exovian Developments",
+    "homepage": "https://github.com/exovian-developments/waves"
+  },
+  "repository": "https://github.com/exovian-developments/waves",
+  "license": "Apache-2.0",
+  "keywords": ["framework", "product-development", "feasibility", "blueprint", "roadmap", "logbook", "monte-carlo", "agile", "waves", "context", "manifest", "rules", "protocol", "multi-session"],
+  "hooks": "./hooks/hooks.json"
+}

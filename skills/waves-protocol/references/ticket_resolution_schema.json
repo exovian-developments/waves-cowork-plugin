@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Jira Resolution Comment Schema",
+  "description": "Schema for structured resolution comments to be posted in Jira, Azure, or any other platform where should be provided a summary of the resolution of the work done. Provides a standardized format for documenting bug fixes, feature implementations, and technical solutions.",
+  "type": "object",
+  "$comment": "This schema guides LLMs in creating comprehensive, professional resolution comments for Jira tickets. The structure follows a problem-solution-result pattern that provides clear documentation for team members, stakeholders, and future maintainers.",
+  "output_format": "markdown_document",
+  "output_instructions": "Write as structured markdown document with clear section headers, suitable to publish directly in a Jira comment.",
+  "required": ["ticket_id", "title", "issue", "root_cause", "key_fixes", "technical_details", "result"],
+  
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "pattern": "^[A-Z]+-[0-9]+$",
+      "description": "Jira-like ticket identifier (e.g., PROJ-123).",
+      "$comment": "Jira ticket identifier (e.g., MT-626, PROJ-123). LLM should extract this from the ticket URL or reference. Must follow standard Jira format: PROJECT_KEY-NUMBER."
+    },
+    
+    "title": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 100,
+      "description": "Concise resolution summary title.",
+      "$comment": "Resolution summary title. LLM should create a concise, professional title that combines the ticket ID with 'Resolution Summary' (e.g., 'MT-626 Resolution Summary'). This serves as the header for the Jira comment."
+    },
+    
+    "issue": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 200,
+      "description": "Single-sentence user-facing problem statement.",
+      "$comment": "Single sentence describing the user-facing problem. LLM should focus on the WHAT - the observable symptom that users experienced. Avoid technical jargon. Use active voice and be specific about the impact (e.g., 'Drivers required double-swipe on arrived at stop button due to UI state not updating after successful server API call')."
+    },
+    
+    "root_cause": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "description": "List of specific technical reasons that led to the issue.",
+      "items" : {
+        "type": "string",
+        "minLength": 50,
+        "maxLength": 400,
+        "description": "One detailed technical root cause.",
+        "$comment": "Detailed explanation of a specific technical root cause. LLM should focus on the WHY - the underlying system behavior that led to the user-facing issue. Each item should describe one distinct root cause, including relevant technical details (e.g., 'The state stream notifications were not being processed correctly because ...')."
+      },
+      "$comment": "Technical explanation of WHY the issue occurred. LLM should identify the underlying system behavior that caused the user-facing problem. Be specific about the technical mechanism - mention APIs, state management, data flow, etc. This should directly explain how the root cause led to the observed issue. The root causes items should not be related to bugs or problems derived from modifications during the resolution itself, only to real root causes else they were not real root causes."
+    },
+    
+    "key_fixes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "description": "Major solution categories implemented to address the issue.",
+      "$comment": "List of major solution categories implemented. LLM should organize fixes by architectural layer or functional area. Each fix should be a distinct, logical grouping of changes. Use clear, action-oriented category names.",
+      "items": {
+        "type": "object",
+        "required": ["category", "description"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 50,
+            "description": "Short name of the fix group.",
+            "$comment": "Short, descriptive name for this group of fixes. LLM should use noun phrases that clearly identify the architectural area or type of change (e.g., 'State Stream Notifications', 'UI Layer State Management', 'Service Layer Cleanup'). Be specific but concise."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 30,
+            "maxLength": 300,
+            "description": "Detailed explanation of what was changed and why.",
+            "$comment": "Detailed explanation of what was changed and why. LLM should explain the specific modifications made, the technical approach taken, and how this addresses part of the root cause. Include method names, architectural principles, or patterns used."
+          }
+        }
+      }
+    },
+    
+    "technical_details": {
+      "type": "object",
+      "required": ["files_modified", "implementation_notes"],
+      "description": "Concrete changes and implementation considerations.",
+      "properties": {
+        "files_modified": {
+          "type": "array",
+          "minItems": 1,
+          "description": "List of modified files with brief change summaries.",
+          "$comment": "List of specific files that were changed. LLM should include relative file paths and line numbers when possible. This helps other developers locate and understand the changes.",
+          "items": {
+            "type": "object",
+            "required": ["file_path", "changes_summary"],
+            "properties": {
+              "file_path": {
+                "type": "string",
+                "minLength": 10,
+                "description": "Relative path to the modified file from project root.",
+                "$comment": "Relative path to the modified file from project root. LLM should use forward slashes and include the file extension. Be precise about the location."
+              },
+              "line_numbers": {
+                "type": "string",
+                "description": "Line number(s) where changes were made, if applicable.",
+                "$comment": "Optional line numbers or ranges where changes were made (e.g., '185', '255-258', '106-109'). LLM should include this when specific line references are helpful."
+              },
+              "changes_summary": {
+                "type": "string",
+                "minLength": 20,
+                "maxLength": 150,
+                "description": "Brief description of what changed in this file.",
+                "$comment": "Brief description of what was changed in this file. LLM should focus on the specific modifications made, not the overall purpose of the file."
+              }
+            }
+          }
+        },
+        
+        "implementation_notes": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Important technical considerations or decisions.",
+          "$comment": "Additional technical considerations, architectural decisions, or compatibility notes. LLM should include important details about the implementation approach, design patterns used, compatibility maintained, or potential impacts.",
+          "items": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 200,
+            "description": "Single implementation note (one idea per item).",
+            "$comment": "Individual implementation note. LLM should focus on technical decisions, architectural patterns, compatibility considerations, or other details that provide context for the solution."
+          }
+        }
+      }
+    },
+    
+    "testing_validation": {
+      "type": "string",
+      "minLength": 50,
+      "maxLength": 250,
+      "description": "Summary of tests and validation performed.",
+      "tests_performed": {
+        "type": "array",
+        "minItems": 1,
+        "$comment": "Types of testing performed to validate the fix. LLM should list the different testing approaches used (unit tests, integration tests, manual testing, etc.).",
+        "items": {
+          "type": "string",
+          "$comment": "LLM should include any important details about each test performed and it should be specific about the details and scenarios tested, specially the test during the development process."
+        }
+      },
+      "$comment": "Summary of testing and validation performed. LLM should describe the testing approaches used to ensure the fix works as intended. Include any important details about test results, known limitations, areas requiring further validation, and manual tests performed by users."
+    },
+    
+    "result": {
+      "type": "string",
+      "minLength": 30,
+      "maxLength": 250,
+      "description": "User-facing outcome and benefits achieved.",
+      "$comment": "User-facing outcome and benefits achieved. LLM should describe the final user experience improvement in clear, non-technical language. Focus on the positive impact - what users can now do that they couldn't before, or how their experience has improved. Use action-oriented language."
+    },
+    
+    "metadata": {
+      "type": "object",
+      "description": "Additional context about the resolution timeline and scope.",
+      "properties": {
+        "resolution_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date when the resolution was completed (YYYY-MM-DD).",
+          "$comment": "Date when the resolution was completed. LLM should use the current date or the date when the fix was implemented."
+        },
+        "estimated_effort": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Perceived complexity/effort level of the fix.",
+          "$comment": "Estimated complexity/effort level of the fix. LLM should assess based on the number of files changed, architectural complexity, and testing requirements."
+        },
+        "impact_scope": {
+          "type": "string",
+          "enum": ["localized", "feature", "system", "architecture"],
+          "description": "Breadth of impact produced by the changes.",
+          "$comment": "Scope of the changes made. LLM should assess whether changes were limited to a specific component (localized), affected a whole feature, touched multiple systems, or involved architectural changes."
+        }
+      }
+    }
+  }
+}

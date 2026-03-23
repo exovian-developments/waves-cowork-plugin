@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "General Project Manifest Schema",
+  "type": "object",
+  "description": "Manifest for non-software projects (academic, creative, business, personal). Describes project identity, structure, deliverables, and context.",
+  "$comment": "This schema is intentionally open (no additionalProperties:false). Add sections that best manifest your project's content. Examples: 'research_methodology' for academic, 'brand_guidelines' for creative, 'market_analysis' for business.",
+
+  "required": ["project", "deliverables"],
+
+  "properties": {
+    "project": {
+      "type": "object",
+      "description": "Basic identity, purpose, and timeline of the project.",
+      "$comment": "Core project information. Adapt fields to your domain: academic (thesis title, institution), creative (client, campaign), business (company, market).",
+      "required": ["name", "description", "type", "start_date"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Project name or title.",
+          "$comment": "Examples: 'Master Thesis: AI in Healthcare', 'Brand Redesign for Acme Corp', 'Q4 Marketing Campaign'."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "High-level description of what this project aims to achieve.",
+          "$comment": "Describe the purpose, audience, and expected outcome. Avoid jargon, write for someone unfamiliar with the project."
+        },
+        "type": {
+          "type": "string",
+          "description": "Category of project.",
+          "$comment": "Examples: 'academic_thesis', 'research_paper', 'brand_design', 'marketing_campaign', 'business_plan', 'personal_project'."
+        },
+        "start_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date when the project started (YYYY-MM-DD).",
+          "$comment": "When work on this project began. Use best estimate if exact date unknown."
+        },
+        "target_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Expected completion or delivery date (YYYY-MM-DD).",
+          "$comment": "Optional. Deadline or target completion date if applicable."
+        },
+        "stakeholders": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "People or entities involved or interested in the project.",
+          "$comment": "Examples: 'Prof. García (thesis advisor)', 'Marketing Team', 'Client: Acme Corp', 'Investors'."
+        }
+      }
+    },
+
+    "structure": {
+      "type": "object",
+      "description": "Organization of the project: sections, chapters, phases, or components.",
+      "$comment": "Adapt to your project type. Academic: chapters/sections. Creative: deliverables/assets. Business: phases/milestones.",
+      "properties": {
+        "organization_type": {
+          "type": "string",
+          "description": "How the project is organized.",
+          "$comment": "Examples: 'chapters' (thesis), 'phases' (campaign), 'modules' (course), 'deliverables' (design project)."
+        },
+        "components": {
+          "type": "array",
+          "description": "List of main components, sections, or phases.",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Component name.",
+                "$comment": "Examples: 'Chapter 1: Introduction', 'Phase 1: Discovery', 'Logo Design'."
+              },
+              "description": {
+                "type": "string",
+                "description": "Brief description of this component's purpose.",
+                "$comment": "What this component covers or delivers."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["not_started", "in_progress", "review", "completed"],
+                "description": "Current status of this component.",
+                "$comment": "Track progress at component level."
+              },
+              "dependencies": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Other components this one depends on.",
+                "$comment": "Optional. List names of components that must be completed first."
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "deliverables": {
+      "type": "array",
+      "description": "Concrete outputs or artifacts the project will produce.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "format"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Deliverable name.",
+            "$comment": "Examples: 'Final Thesis Document', 'Brand Guidelines PDF', 'Pitch Deck', 'Market Analysis Report'."
+          },
+          "format": {
+            "type": "string",
+            "description": "File format or medium.",
+            "$comment": "Examples: 'PDF', 'Word Document', 'Figma File', 'PowerPoint', 'Video', 'Physical Prototype'."
+          },
+          "description": {
+            "type": "string",
+            "description": "What this deliverable contains or represents.",
+            "$comment": "Brief description of content and purpose."
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "description": "When this deliverable is due (YYYY-MM-DD).",
+            "$comment": "Optional. Specific deadline for this deliverable."
+          }
+        }
+      },
+      "$comment": "List all expected outputs. Academic: thesis, presentations. Creative: designs, assets. Business: reports, decks."
+    },
+
+    "references": {
+      "type": "object",
+      "description": "Reference materials, sources, and resources for the project.",
+      "$comment": "Organize references by type. Adapt categories to your domain.",
+      "properties": {
+        "documents": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Key documents or files.",
+          "$comment": "Examples: 'Client Brief.pdf', 'Research Data.xlsx', 'Competitor Analysis.docx'."
+        },
+        "urls": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Relevant URLs or links.",
+          "$comment": "Examples: 'https://competitor.com', 'Shared Google Drive folder', 'Figma project link'."
+        },
+        "bibliography": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Academic citations or bibliography entries.",
+          "$comment": "For academic projects. Use consistent citation format (APA, MLA, etc.)."
+        }
+      }
+    },
+
+    "standards": {
+      "type": "object",
+      "description": "Guidelines, standards, or methodologies the project follows.",
+      "$comment": "Reference your project_standards.json or list key standards inline.",
+      "properties": {
+        "style_guide": {
+          "type": "string",
+          "description": "Primary style or format guide.",
+          "$comment": "Examples: 'APA 7th Edition', 'Company Brand Guidelines v2', 'Chicago Manual of Style'."
+        },
+        "methodology": {
+          "type": "string",
+          "description": "Research or work methodology.",
+          "$comment": "Examples: 'Qualitative Research', 'Design Thinking', 'Agile/Scrum', 'Lean Canvas'."
+        },
+        "compliance": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regulatory or compliance requirements.",
+          "$comment": "Examples: 'IRB Approval Required', 'GDPR Compliant', 'ISO 27001'."
+        }
+      }
+    },
+
+    "notes": {
+      "type": "object",
+      "description": "Additional observations, risks, or recommendations.",
+      "$comment": "Flexible section for anything that doesn't fit elsewhere.",
+      "properties": {
+        "risks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Identified risks or challenges.",
+          "$comment": "Examples: 'Tight deadline', 'Pending client approval', 'Data collection delays'."
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Assumptions the project is based on.",
+          "$comment": "Examples: 'Client will provide brand assets by Nov 15', 'Survey will reach 100+ respondents'."
+        },
+        "recommendations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Suggestions for improvement or next steps.",
+          "$comment": "LLM-generated or user-added recommendations."
+        }
+      }
+    }
+  }
+}
