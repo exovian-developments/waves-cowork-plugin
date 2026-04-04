@@ -11,7 +11,7 @@ Works with **Claude Code** and **Claude Desktop (Cowork mode)**.
 Add the marketplace and install:
 
 ```bash
-claude plugin marketplace add exovian-developments/waves-plugin
+claude plugin marketplace add exovian-developments/waves-cowork-plugin
 claude plugin install waves
 ```
 
@@ -20,12 +20,12 @@ Updates are automatic when the marketplace is refreshed.
 ### Option 2: Direct install from GitHub
 
 ```bash
-claude plugin install exovian-developments/waves-plugin
+claude plugin install exovian-developments/waves-cowork-plugin
 ```
 
 ### Option 3: Download .plugin file
 
-Download `waves.plugin` from [Releases](https://github.com/exovian-developments/waves-plugin/releases) and open it in Claude Desktop.
+Download `waves.plugin` from [Releases](https://github.com/exovian-developments/waves-cowork-plugin/releases) and open it in Claude Desktop.
 
 ## What it does
 
