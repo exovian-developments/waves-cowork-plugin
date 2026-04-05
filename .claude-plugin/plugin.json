@@ -6,7 +6,7 @@
     "name": "Exovian Developments",
     "homepage": "https://github.com/exovian-developments/waves"
   },
-  "repository": "https://github.com/exovian-developments/waves",
+  "repository": "https://github.com/exovian-developments/waves-cowork-plugin",
   "license": "AGPL-3.0-or-later",
   "keywords": ["framework", "product-development", "feasibility", "blueprint", "roadmap", "logbook", "monte-carlo", "agile", "waves", "context", "manifest", "rules", "protocol", "multi-session"],
   "hooks": "./hooks/hooks.json"

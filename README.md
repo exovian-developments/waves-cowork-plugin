@@ -88,4 +88,4 @@ v1.3.1 — Aligned with Waves™ Framework v1.3.1
 
 ## License
 
-Apache-2.0
+AGPL-3.0-or-later
