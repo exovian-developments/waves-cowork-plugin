@@ -397,6 +397,12 @@
           "items": { "type": "integer", "minimum": 1 },
           "description": "IDs of capabilities within the same list that must exist first.",
           "$comment": "Optional. References capabilities in the same list only. If a capability has dependencies, they must appear before it in the array. Empty array or omitted means no dependencies. Non-essential capabilities implicitly depend on essential ones — no need to declare that cross-list dependency."
+        },
+        "details": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Concrete characteristics that define what this capability includes. Each item describes a specific aspect of what the capability does.",
+          "$comment": "Optional. Use when a capability is complex enough that a single sentence doesn't capture everything it includes. Each item is a characteristic, not a sub-task or implementation detail. Example for a dashboard capability: 'Progress bar per project calculated from milestones achieved / total', 'Filter by project name', 'Responsive: 1 column mobile, 2 tablet, 3 desktop'. If the capability is simple, omit this field entirely — the capability description is enough."
         }
       },
       "required": ["id", "capability"]

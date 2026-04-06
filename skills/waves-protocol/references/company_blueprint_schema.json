@@ -375,6 +375,12 @@
         "description": {
           "type": "string",
           "description": "Additional context on what this capability means and why it matters."
+        },
+        "details": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Concrete characteristics that define what this capability includes.",
+          "$comment": "Optional. Use when the capability is complex enough that a single sentence doesn't capture everything. Each item describes a specific aspect of what the company must be able to do."
         }
       },
       "required": ["id", "capability", "status"]
