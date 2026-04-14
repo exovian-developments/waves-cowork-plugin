@@ -380,7 +380,7 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Characteristics, specifications, and behaviors that define what this strategic capability includes.",
-          "$comment": "Optional. Expand the characteristics that define this capability. Each item should be a declarative statement of what the company can do or how this capability manifests. What belongs: specific behaviors, specifications, constraints, variants. What does NOT belong: implementation tasks, technical details, or testing criteria. If the capability is simple enough that the description says it all, omit details entirely."
+          "$comment": "Optional. Expand the characteristics that define this capability. Each item should be a declarative statement of what the company can do or how this capability manifests. What belongs: specific behaviors, specifications, constraints, variants, visual or UX aspects, data shown. Resolver references are allowed and encouraged — they name WHO or WHAT resolves the capability (e.g., 'Stripe' for payments, 'Google Workspace' for collaboration). Naming a known resolver compresses semantic context that the LLM already has from training. The test: does this name activate domain knowledge? If yes, include it. What is NOT a resolver reference: internal function signatures, framework internals, architecture patterns — those describe HOW, not WHAT. What does NOT belong: implementation tasks, testing criteria, or roadmap notes. If the capability is simple enough that the description says it all, omit details entirely."
         }
       },
       "required": ["id", "capability", "status"]
