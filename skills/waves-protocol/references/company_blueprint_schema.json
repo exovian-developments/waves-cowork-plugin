@@ -379,8 +379,8 @@
         "details": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Concrete characteristics that define what this capability includes.",
-          "$comment": "Optional. Use when the capability is complex enough that a single sentence doesn't capture everything. Each item describes a specific aspect of what the company must be able to do."
+          "description": "Characteristics, specifications, and behaviors that define what this strategic capability includes.",
+          "$comment": "Optional. Expand the characteristics that define this capability. Each item should be a declarative statement of what the company can do or how this capability manifests. What belongs: specific behaviors, specifications, constraints, variants. What does NOT belong: implementation tasks, technical details, or testing criteria. If the capability is simple enough that the description says it all, omit details entirely."
         }
       },
       "required": ["id", "capability", "status"]
