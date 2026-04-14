@@ -377,8 +377,8 @@
 
     "capability": {
       "type": "object",
-      "description": "Something the product lets the user do.",
-      "$comment": "Format: 'The user can [specific action]'. NOT a button, NOT an endpoint, NOT a technical implementation. Test: complete 'With this product, the user can ___'. If the statement is too technical ('the system processes webhooks'), it is not a capability — it is an implementation detail. Be specific in responsibility and clear about what this capability does AND does not do.",
+      "description": "Something the product lets the user do, within a single functional domain.",
+      "$comment": "A capability represents ONE functional domain of the product — authentication, payment, notifications, search, etc. Everything that belongs to the same domain can live in the same capability, and details[] expands on its specific aspects. But different domains MUST be separate capabilities. The test: if you find a connector like 'and' or 'or' joining two things that belong to different functional domains (e.g., 'Authentication AND payment', 'Dashboard AND notifications'), split them — they are separate capabilities. However, 'Payment via Stripe with recurring billing, upgrades, downgrades, and cancellations' is ONE capability because everything belongs to the payment domain. Use details[] to list the specific aspects within the domain. Format: 'The user can [action within one domain]'. NOT a button, NOT an endpoint, NOT a technical implementation. Test: complete 'With this product, the user can ___'. If the statement is too technical ('the system processes webhooks'), it is not a capability — it is an implementation detail.",
       "properties": {
         "id": {
           "type": "integer",
@@ -389,8 +389,8 @@
         "capability": {
           "type": "string",
           "maxLength": 300,
-          "description": "What the user can do.",
-          "$comment": "Natural language. Specific in responsibility, clear in boundaries. Include what this capability covers AND what it explicitly does not cover when the boundary is not obvious."
+          "description": "What the user can do — within one functional domain, not a mix of unrelated domains.",
+          "$comment": "Natural language. One functional domain per capability. If the description joins different domains with 'and' or 'or' (authentication AND payment, dashboard AND notifications), split into separate capabilities. Within the same domain, multiple aspects are fine — expand them in details[]. Specific in responsibility, clear in boundaries. Include what this capability covers AND what it explicitly does not cover when the boundary is not obvious."
         },
         "depends_on": {
           "type": "array",
