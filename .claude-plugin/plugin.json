@@ -4,10 +4,11 @@
   "description": "Product Consciousness Framework for AI agents. Complete product lifecycle: feasibility analysis with Monte Carlo/Bayesian projections, product foundation, blueprint, roadmaps, logbooks, resolutions. Supports software, general, and agentic project types. Includes governing_principles (organizational governance anchor), 4 defense layers (inline rules + banner + post-impl audit + integrity audit), adversarial subagents (orthogonality reviewer + verifier pattern), background metacognition, and multi-session continuity. Replaces Scrum/Kanban with organic delivery cycles called waves.",
   "author": {
     "name": "Exovian Developments",
-    "homepage": "https://github.com/exovian-developments/waves"
+    "email": "andrius@exovian.dev",
+    "url": "https://github.com/exovian-developments"
   },
+  "homepage": "https://github.com/exovian-developments/waves-cowork-plugin",
   "repository": "https://github.com/exovian-developments/waves-cowork-plugin",
   "license": "AGPL-3.0-or-later",
-  "keywords": ["framework", "product-development", "feasibility", "blueprint", "roadmap", "logbook", "monte-carlo", "agile", "waves", "context", "manifest", "rules", "protocol", "multi-session"],
-  "hooks": "./hooks/hooks.json"
+  "keywords": ["framework", "product-development", "feasibility", "blueprint", "roadmap", "logbook", "monte-carlo", "agile", "waves", "context", "manifest", "rules", "protocol", "multi-session", "agentic", "governance"]
 }

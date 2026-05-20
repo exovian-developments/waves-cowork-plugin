@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "waves-cowork-plugin",
+  "description": "Waves™ Framework marketplace — Product Consciousness Framework for AI agents.",
+  "owner": {
+    "name": "Exovian Developments",
+    "email": "andrius@exovian.dev"
+  },
+  "plugins": [
+    {
+      "name": "waves",
+      "description": "Product Consciousness Framework for AI agents. Supports software, general, and agentic project types. Includes governing_principles as the universal anchor of the organizational governance chain (company_blueprint → ecosystem rules → local rules → logbooks), 4 defense layers (inline rules + banner + post-impl audit + integrity audit), adversarial subagents (orthogonality reviewer + integrity reviewer + verifier pattern A→B), background metacognition, and multi-session continuity. Complete product lifecycle from feasibility analysis (Monte Carlo / Bayesian) to resolution.",
+      "author": {
+        "name": "Exovian Developments",
+        "url": "https://github.com/exovian-developments"
+      },
+      "category": "framework",
+      "source": "..",
+      "homepage": "https://github.com/exovian-developments/waves-cowork-plugin"
+    }
+  ]
+}
