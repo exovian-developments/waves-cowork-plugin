@@ -1,0 +1,527 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agentic Project Manifest Schema",
+  "type": "object",
+  "description": "Manifest for agentic projects: products whose value is an orchestration of agents/subagents with skills, hooks, tools, and configurations — not traditional software, not academic/creative content. Examples: a corpus pipeline orchestrated by Claude Code + Claude Browser + Claude Desktop; a customer operations hub coordinating triage/drafter/escalation subagents; a compliance center monitoring regulatory feeds and classifying transactions.",
+  "$comment": "Ratified empirically with 3 cases: exobase_med_corpus (8 roles, 4 state contracts, 8-stage pipeline), Customer Operations Hub (5 roles, hybrid lifecycle), Compliance Operations Center (6 roles, decisions_full observability). Roles are NOT a fixed enum — each project declares its own. The schema models the structural concepts that recur across agentic projects without imposing domain-specific values. additionalProperties:false at root forces consistency; sub-objects with operational metadata (rate_limits, etc.) allow additionalProperties:true for project-specific extensions.",
+
+  "required": ["project", "orchestration", "roles"],
+  "additionalProperties": false,
+
+  "properties": {
+    "project": {
+      "type": "object",
+      "description": "Basic identity of the agentic project.",
+      "$comment": "kind is a free string discriminator. Common values seen in the wild: 'pipeline' (ingestion/transformation), 'assistant' (interactive conversational), 'monitoring' (continuous surveillance + alert), 'orchestration' (high-level coordinator). Do NOT enforce an enum — the agentic paradigm is too young to lock these.",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Project name."
+        },
+        "codename": {
+          "type": "string",
+          "description": "Optional short codename for ecosystem-internal references."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "High-level purpose of the agentic system: what it orchestrates, for whom, to achieve what outcome."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Discriminator for the agentic project type. Free string — common values: 'pipeline', 'assistant', 'monitoring', 'orchestration', 'research'.",
+          "$comment": "Document your project's category here. Helps tooling and future readers identify the project shape at a glance."
+        }
+      }
+    },
+
+    "orchestration": {
+      "type": "object",
+      "description": "How the primary agent coordinates subagents: who talks to whom, communication protocol, write-ownership policy, approval gates.",
+      "$comment": "The core of an agentic project. primary_agent is the entity the human owner talks to. Subagents are dispatched by the primary. communication_protocol and write_ownership_policy are first-class because they determine whether the project can scale to many parallel subagents without race conditions.",
+      "required": ["primary_agent"],
+      "additionalProperties": false,
+      "properties": {
+        "primary_agent": {
+          "type": "object",
+          "description": "The orchestrator that the human owner addresses directly.",
+          "required": ["role_ref"],
+          "additionalProperties": false,
+          "properties": {
+            "role_ref": {
+              "type": "string",
+              "description": "Reference to a role name declared in the top-level 'roles' array. The role definition carries tools, permissions, and constraints."
+            },
+            "talks_to_owner": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether this agent is the one the human owner interacts with. Typically true for the primary."
+            },
+            "may_dispatch_roles": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Names of roles the primary agent is allowed to dispatch. Empty/missing means it can dispatch any declared role."
+            }
+          }
+        },
+        "communication_protocol": {
+          "type": "string",
+          "enum": ["async_file_based", "synchronous_inline", "event_bus", "custom"],
+          "description": "How the orchestrator and subagents exchange information.",
+          "$comment": "async_file_based: subagents write outputs to files, others read. Scales to many parallel subagents without locks when combined with single_writer_per_file. synchronous_inline: orchestrator waits for each subagent inline (simpler, lower parallelism). event_bus: pub/sub. custom: document elsewhere."
+        },
+        "write_ownership_policy": {
+          "type": "string",
+          "enum": ["single_writer_per_file", "lock_based", "append_only_log", "custom"],
+          "description": "How write conflicts are prevented.",
+          "$comment": "single_writer_per_file: each file has exactly one writer (recommended for high parallelism — prevents collisions by construction, no locks needed). lock_based: explicit lock acquisition before write. append_only_log: writers only append, never modify. custom: document elsewhere."
+        },
+        "approval_gates": {
+          "type": "array",
+          "description": "Decisions that require approval (human or graduated condition) before the orchestrator executes them.",
+          "items": { "$ref": "#/$defs/approval_gate" }
+        }
+      }
+    },
+
+    "roles": {
+      "type": "array",
+      "description": "All roles that subagents (and the primary) can play. Each project declares its own role names — there is no fixed enum.",
+      "$comment": "Roles encode responsibility + authorization. The pilot (exobase_med_corpus) declared 8 roles; Customer Ops Hub declared 5; Compliance Center declared 6. Each has its own domain semantics. tools_authorized and tools_forbidden create the security boundary: a role can only invoke tools it has authorization for.",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/role" }
+    },
+
+    "subagents": {
+      "type": "object",
+      "description": "Subagent lifecycle and bookkeeping configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "lifecycle": {
+          "type": "string",
+          "enum": ["ephemeral", "persistent", "hybrid"],
+          "description": "ephemeral: subagents are spawned per task and die at completion (state lives in disk contracts). persistent: subagents live in background with their own state. hybrid: mix of both (e.g. a listener subagent is persistent while extractors are ephemeral)."
+        },
+        "logbooks_dir": {
+          "type": "string",
+          "description": "Directory path where per-subagent logbooks live. Each subagent owns its own logbook file (single_writer_per_file principle).",
+          "$comment": "Example: 'ai_files/waves/wN/subagent_logbooks/'."
+        }
+      }
+    },
+
+    "skills": {
+      "type": "object",
+      "description": "Reusable named procedures invokable by subagents.",
+      "$comment": "Skills are how repeatable procedures get a name and a version. Different from tools (which are infrastructure capabilities) — skills are domain-aware compositions. Example: 'extract-from-pubmed' is a skill that uses a browser tool + a parsing tool + a writer tool.",
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "type": "string",
+          "description": "Path where skill files live."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["markdown_with_frontmatter", "json_definitions", "code_modules"],
+          "description": "How skills are materialized on disk. markdown_with_frontmatter is the Claude Code default."
+        },
+        "versioning_required": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, every skill invocation must record its version in the output metadata. Enables retrospective invalidation of corpus when a skill's extraction logic changes."
+        }
+      }
+    },
+
+    "tools": {
+      "type": "array",
+      "description": "External capabilities (MCPs, APIs, browsers, filesystems, CLIs) available to roles. Roles reference tools by name in their tools_authorized list.",
+      "items": { "$ref": "#/$defs/tool" }
+    },
+
+    "data_sources": {
+      "type": "array",
+      "description": "Origins of input data the project consumes.",
+      "items": { "$ref": "#/$defs/data_source" }
+    },
+
+    "state_contracts": {
+      "type": "array",
+      "description": "Persistent state structures shared across subagent invocations, governed by a JSON schema and a single writer role.",
+      "$comment": "The single_writer_per_file principle materializes here. Each state contract has exactly one writer_role; everyone else reads. partitioning slices the contract into independently-writable files (e.g. one per subagent, one per specialty) for parallelism.",
+      "items": { "$ref": "#/$defs/state_contract" }
+    },
+
+    "handoff_contracts": {
+      "type": "array",
+      "description": "File-based handoffs between roles. Producer writes to file_pattern; consumer reads and processes.",
+      "items": { "$ref": "#/$defs/handoff_contract" }
+    },
+
+    "pipelines": {
+      "type": "array",
+      "description": "Processing pipelines with granular state transitions. Each transition is an atomic write — this is the primary resilience mechanism for crash recovery.",
+      "items": {
+        "type": "object",
+        "required": ["name", "stages"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "Pipeline name." },
+          "description": { "type": "string", "description": "What the pipeline does end-to-end." },
+          "stages": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/pipeline_stage" }
+          }
+        }
+      }
+    },
+
+    "integration_contracts": {
+      "type": "array",
+      "description": "Outputs delivered to downstream systems, with the shape contract that the downstream expects.",
+      "items": {
+        "type": "object",
+        "required": ["downstream", "data_shape"],
+        "additionalProperties": true,
+        "properties": {
+          "downstream": {
+            "type": "string",
+            "description": "Name of the downstream system or package (e.g. 'facts_core', 'Slack', 'Postgres')."
+          },
+          "schema_ref": {
+            "type": "string",
+            "description": "Optional reference to a JSON schema defining the contract shape."
+          },
+          "data_shape": {
+            "type": "string",
+            "description": "Concise description of what the data looks like and what the downstream expects."
+          }
+        }
+      }
+    },
+
+    "triggers": {
+      "type": "array",
+      "description": "How and when pipelines or roles get invoked.",
+      "items": { "$ref": "#/$defs/trigger" }
+    },
+
+    "governance": {
+      "type": "object",
+      "description": "Boundaries, escape hatches, and budget controls.",
+      "additionalProperties": false,
+      "properties": {
+        "owner_escape_hatch": {
+          "type": "object",
+          "description": "Mechanism for the human owner to invoke a subagent directly, bypassing the orchestrator. Audited.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "audit_log_path": {
+              "type": "string",
+              "description": "File path where direct invocations are logged. Read by the orchestrator at session start."
+            }
+          }
+        },
+        "scope_boundaries": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hard restrictions on what the system as a whole can do. Free strings — examples: 'no email sending', 'read-only on production DB', 'no destructive Postgres operations'."
+        },
+        "budget_controls": {
+          "type": "object",
+          "description": "Cost and rate controls.",
+          "additionalProperties": true,
+          "properties": {
+            "daily_max_usd": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Maximum total spend across all subagent calls per day."
+            },
+            "per_source_rate_limits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "source": { "type": "string" },
+                  "limit": { "type": "string", "description": "e.g. '60/min', '1000/day'" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "observability": {
+      "type": "object",
+      "description": "Logging and audit level for the project.",
+      "additionalProperties": false,
+      "properties": {
+        "log_level": {
+          "type": "string",
+          "enum": ["errors_only", "errors_and_outputs", "decisions_full", "verbose"],
+          "description": "errors_only: only failures. errors_and_outputs: standard for MVP. decisions_full: every subagent decision logged (recommended for regulated domains like compliance). verbose: full trace including prompts."
+        },
+        "audit_critical_decisions": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, decisions tagged 'critical' by approval_gates produce a dedicated audit log entry regardless of log_level."
+        }
+      }
+    },
+
+    "source_access_modes": {
+      "type": "array",
+      "description": "Modes by which data sources are accessed in this project's domain. Free strings — each project defines its own.",
+      "$comment": "Pilot example: ['api', 'scraping', 'manual_handoff', 'institutional_negotiation']. Customer Ops example: ['mcp_api', 'webhook']. Compliance example: ['scraping', 'core_banking_stream']. Do NOT enforce an enum — modes are domain-specific.",
+      "items": { "type": "string" }
+    }
+  },
+
+  "$defs": {
+    "role": {
+      "type": "object",
+      "description": "A role that subagents (or the primary) play. Encodes responsibility and tool authorization.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Role name. Project-defined. Examples from real cases: 'orchestrator', 'browser_extractor', 'validator', 'indexer', 'state_updater', 'auditor', 'inspector', 'verifier' (pilot); 'ticket-triage', 'response-drafter', 'escalation-detector', 'kb-curator' (Customer Ops)."
+        },
+        "description": {
+          "type": "string",
+          "description": "What this role is responsible for."
+        },
+        "count_pattern": {
+          "type": "string",
+          "description": "How many instances of this role exist. Free string — examples: '1' (singleton), 'N' (variable parallel count), '1_per_specialty', '1_per_jurisdiction', '1_per_source'."
+        },
+        "tools_authorized": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of tools (from top-level 'tools' array) this role is authorized to use."
+        },
+        "tools_forbidden": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of tools this role is explicitly forbidden from using. Useful for documenting security boundaries (e.g. 'indexer' is forbidden from 'browser' to prevent accidental scraping)."
+        },
+        "talks_to": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of other roles this role may communicate with. Empty/missing means 'only orchestrator'."
+        },
+        "writes_to": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths or state_contract names this role is authorized to write. Establishes the single_writer_per_file boundary."
+        }
+      }
+    },
+
+    "tool": {
+      "type": "object",
+      "description": "An external capability available to roles.",
+      "required": ["name", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tool name. Referenced by roles in tools_authorized/tools_forbidden."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["mcp", "api", "browser", "filesystem", "cli", "custom"],
+          "description": "mcp: MCP server. api: REST/GraphQL/gRPC client. browser: headless browser automation. filesystem: read/write local files. cli: shell command invocations. custom: document elsewhere."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the tool does."
+        },
+        "requires_credentials": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this tool needs credentials (API key, OAuth token, etc.) configured separately."
+        },
+        "rate_limits": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Free-form rate limit metadata. Examples: { 'requests_per_minute': 60 }, { 'tokens_per_day': 100000 }."
+        }
+      }
+    },
+
+    "data_source": {
+      "type": "object",
+      "description": "Origin of input data.",
+      "required": ["name", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source name."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["public_api", "private_api", "website", "file_share", "stream", "database", "custom"],
+          "description": "Type of source."
+        },
+        "access_mode": {
+          "type": "string",
+          "description": "How the source is accessed. References values from top-level source_access_modes. Free string."
+        },
+        "auth_required": {
+          "type": "boolean",
+          "default": false
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+
+    "state_contract": {
+      "type": "object",
+      "description": "A persistent state structure governed by a JSON schema.",
+      "required": ["name", "writer_role"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Contract name. Examples from pilot: 'specialties_master', 'specialties_progress', 'sources_registry', 'extraction_output'."
+        },
+        "schema_ref": {
+          "type": "string",
+          "description": "Path to the JSON schema defining the contract structure."
+        },
+        "volatility": {
+          "type": "string",
+          "enum": ["stable", "volatile", "ephemeral"],
+          "description": "stable: rarely changes (e.g. master catalog). volatile: changes per subagent invocation (e.g. progress trackers). ephemeral: exists per-extraction and gets consumed (e.g. extraction outputs handed off to indexer)."
+        },
+        "writer_role": {
+          "type": "string",
+          "description": "Name of the role authorized to write this contract. Enforces single_writer_per_file by referencing one role only."
+        },
+        "partitioning": {
+          "type": "string",
+          "description": "How the contract is sliced into independently-writable files. Free string — examples: 'singleton' (one file), 'by_subagent' (one file per subagent), 'by_specialty', 'by_jurisdiction', 'by_severity'."
+        }
+      }
+    },
+
+    "handoff_contract": {
+      "type": "object",
+      "description": "File-based handoff between roles.",
+      "required": ["producer_role", "consumer_role", "file_pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "producer_role": {
+          "type": "string",
+          "description": "Role that writes the file."
+        },
+        "consumer_role": {
+          "type": "string",
+          "description": "Role that reads the file."
+        },
+        "file_pattern": {
+          "type": "string",
+          "description": "Path pattern with placeholders. Example: 'output/{source_id}.json'."
+        },
+        "schema_ref": {
+          "type": "string",
+          "description": "Optional JSON schema for the handoff payload."
+        },
+        "description": { "type": "string" }
+      }
+    },
+
+    "pipeline_stage": {
+      "type": "object",
+      "description": "One state in a pipeline's state machine. Transitions between stages are atomic writes — this is the resilience primitive.",
+      "required": ["state"],
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "type": "string",
+          "description": "State name. Examples: 'pending', 'claimed', 'fetching', 'parsing', 'writing_output', 'extracted', 'validated', 'indexed'."
+        },
+        "role": {
+          "type": "string",
+          "description": "Role responsible for transitioning out of this state."
+        },
+        "transitions_to": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Possible next states. A stage may have multiple outgoing transitions (e.g. 'validated' may transition to 'indexed' or 'rejected')."
+        },
+        "stuck_threshold_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "If a record stays in this state longer than this threshold without transitioning, a verifier role flags it as stuck."
+        }
+      }
+    },
+
+    "trigger": {
+      "type": "object",
+      "description": "How a pipeline or role gets invoked.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["manual", "event", "schedule", "agent_cascade"],
+          "description": "manual: invoked by the owner. event: invoked by external event (webhook, file upload). schedule: invoked on a cron-like schedule. agent_cascade: invoked when another role completes."
+        },
+        "spec": {
+          "type": "string",
+          "description": "Trigger specification. For schedule: cron expression. For event: event name or webhook path. For agent_cascade: name of the upstream role whose completion triggers this. For manual: free description."
+        },
+        "invokes_role": {
+          "type": "string",
+          "description": "Role that gets invoked when this trigger fires."
+        },
+        "description": { "type": "string" }
+      }
+    },
+
+    "approval_gate": {
+      "type": "object",
+      "description": "A decision that requires approval before execution. Supports graduated approval via free-form auto_approve_when conditions.",
+      "required": ["action"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Identifier for this gate."
+        },
+        "action": {
+          "type": "string",
+          "description": "What action is gated. Free string — examples: 'index_facts_to_db', 'send_response_to_customer', 'freeze_transaction', 'publish_compliance_alert'."
+        },
+        "auto_approve_when": {
+          "type": "string",
+          "description": "Free-form condition that, when true, allows the action to proceed without human approval. Examples: 'confidence > 0.9 AND volume < 100', 'severity != critical', 'always' (effectively no gate), 'never' (always requires human)."
+        },
+        "fallback": {
+          "type": "string",
+          "enum": ["human_approval", "block", "log_only"],
+          "description": "What happens when auto_approve_when is false. human_approval: surface to owner. block: refuse the action. log_only: log but do not execute."
+        },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}

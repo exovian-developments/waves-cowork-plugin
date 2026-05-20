@@ -15,32 +15,69 @@
       "description": "Short explanation of the project's purpose and context.",
       "$comment": "Analyze /ai_files/project_manifest.json to have a better understanding of the project."
     },
-
     "language": {
       "type": "string",
-      "description": "Main programming language of the project. Example: 'dart', 'kotlin', 'typescript'."
+      "description": "Main programming language of the project. Example: 'dart', 'kotlin', 'typescript', or for agentic projects: 'markdown+bash', 'prompts+yaml', etc."
     },
     "type": {
       "type": "string",
-      "enum": ["frontend", "backend", "fullstack"],
-      "description": "Project scope. Determines which rule sections apply."
+      "enum": ["frontend", "backend", "fullstack", "agentic"],
+      "description": "Project scope. Determines which rule sections apply. 'agentic' enables free-form additional categories beyond the canonical set.",
+      "$comment": "frontend/backend/fullstack: traditional software with mature taxonomy — additional rule categories are closed. agentic: orchestration projects with skills, hooks, tools, state contracts and pipelines — additional categories are open so the domain can declare custom categories as patterns emerge. The discrimination is enforced by the conditional allOf at the root."
     },
     "rules": {
       "type": "object",
-      "description": "Organized rule sections depending on type and general categories. Add a section only when a rule for that section needs to be created",
-      "properties": {
-        "architecture": { "$ref": "#/$defs/ruleList" },
-        "testing": { "$ref": "#/$defs/ruleList" },
-        "naming_conventions": { "$ref": "#/$defs/ruleList" },
-        "presentation_layer": { "$ref": "#/$defs/ruleList" },
-        "data_layer": { "$ref": "#/$defs/ruleList" },
-        "api_layer": { "$ref": "#/$defs/ruleList" },
-        "infra": { "$ref": "#/$defs/ruleList" }
-      },
-      "additionalProperties": false
+      "description": "Organized rule sections. The set of allowed category names depends on `type` — see the conditional allOf at the root."
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "agentic" } },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": {
+          "rules": {
+            "$ref": "#/$defs/rulesCommonProperties",
+            "unevaluatedProperties": { "$ref": "#/$defs/ruleList" }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "rules": {
+            "$ref": "#/$defs/rulesCommonProperties",
+            "unevaluatedProperties": false
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
+    "rulesCommonProperties": {
+      "type": "object",
+      "description": "Shared declared categories for any project type. Universals are available to every type; agentic-native categories are listed so they validate as ruleList even when present in a non-agentic project (allowed only because they map to known shapes — but additional UNDECLARED categories are still rejected outside agentic).",
+      "properties": {
+        "governing_principles": { "$ref": "#/$defs/ruleList" },
+        "architecture":         { "$ref": "#/$defs/ruleList" },
+        "testing":              { "$ref": "#/$defs/ruleList" },
+        "naming_conventions":   { "$ref": "#/$defs/ruleList" },
+        "presentation_layer":   { "$ref": "#/$defs/ruleList" },
+        "data_layer":           { "$ref": "#/$defs/ruleList" },
+        "api_layer":            { "$ref": "#/$defs/ruleList" },
+        "infra":                { "$ref": "#/$defs/ruleList" },
+        "role_design":          { "$ref": "#/$defs/ruleList" },
+        "skills_management":    { "$ref": "#/$defs/ruleList" },
+        "tool_use":             { "$ref": "#/$defs/ruleList" },
+        "hooks_lifecycle":      { "$ref": "#/$defs/ruleList" },
+        "state_contracts":      { "$ref": "#/$defs/ruleList" },
+        "pipeline_design":      { "$ref": "#/$defs/ruleList" },
+        "governance":           { "$ref": "#/$defs/ruleList" },
+        "budget_and_concurrency": { "$ref": "#/$defs/ruleList" }
+      },
+      "$comment": "governing_principles is the universal anchor — first ciudadano de la cadena company_blueprint → ecosystem rules → local rules → logbooks (organizational governance layer, decision #6 of Waves 2.0 roadmap). Available for ALL project types. The 8 agentic-native categories (role_design, skills_management, tool_use, hooks_lifecycle, state_contracts, pipeline_design, governance, budget_and_concurrency) are aligned to Claude Code primitives. unevaluatedProperties behavior depends on project type — see the conditional allOf at the root."
+    },
     "ruleList": {
       "type": "array",
       "description": "List of rules for a given category or section.",
@@ -51,7 +88,7 @@
     "rule": {
       "type": "object",
       "description": "Single concise rule with numeric identifier and timestamps.",
-      "required": ["id", "created_at", "description"],
+      "required": ["id", "created_at", "description", "scope"],
       "properties": {
         "id": {
           "type": "integer",
@@ -75,10 +112,16 @@
           "type": "string",
           "maxLength": 280,
           "description": "Concise project rule. Must not be overly long or context-dependent."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["ecosystem", "local"],
+          "description": "Governance level. ecosystem = identical across all projects in the organization. local = specific to this project.",
+          "$comment": "ecosystem: central governance rule. Should only be modified from the designated source of truth and propagated to all projects. An agent working in a specific project must NOT modify, delete, or rephrase ecosystem rules. local: project-specific rule. The agent can propose, modify, or delete it with /waves:rules-update."
         }
       },
-      "$comment": "When creating a rule: - Must apply the YAGNI principle to avoid overengineering. - Avoid creating rules for hypothetical scenarios or future features that may never be implemented. Focus on current project needs and avoid unnecessary complexity."
+      "$comment": "When creating a rule: - Must apply the YAGNI principle to avoid overengineering. - Avoid creating rules for hypothetical scenarios or future features that may never be implemented. Focus on current project needs and avoid unnecessary complexity. When scope is ecosystem, the rule must be identical across all project_rules.json in the organization. When scope is local, the rule only exists in the project where it was created."
     }
   },
-  "$comment": "All rules are mandatory, only create a new rule if it meets all the following criteria: - Promotes project-wide consistency. Improves code clarity, structure, and long-term maintainability. - Does not contradict or create ambiguity with other rules. - Establishes consistent project-wide implementation patterns that define how things should be done, and may include technical details when part of the project's standard practices, but not situational configurations or tool-specific setups. - Can be applied without requiring situational context or knowledge of a specific library. "
+  "$comment": "All rules are mandatory, only create a new rule if it meets all the following criteria: - Promotes project-wide consistency. Improves code clarity, structure, and long-term maintainability. - Does not contradict or create ambiguity with other rules. - Establishes consistent project-wide implementation patterns that define how things should be done, and may include technical details when part of the project's standard practices, but not situational configurations or tool-specific setups. - Can be applied without requiring situational context or knowledge of a specific library. Within each section, ecosystem rules go first, followed by local rules. This order is mandatory so the agent reads governance rules before project-specific ones."
 }

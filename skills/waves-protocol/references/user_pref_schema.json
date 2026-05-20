@@ -126,9 +126,9 @@
       "properties": {
         "project_type": {
           "type": "string",
-          "enum": ["software", "general"],
-          "description": "Type of project: software (code-based) or general (academic, creative, business, other).",
-          "$comment": "Determines which schemas to use. Software uses logbook_software_schema.json, general uses logbook_general_schema.json."
+          "enum": ["software", "general", "agentic"],
+          "description": "Type of project: software (code-based traditional applications), general (academic, creative, business, personal — non-software), or agentic (products whose value is an orchestration of agents/subagents with skills, hooks, tools — not traditional software, not academic content).",
+          "$comment": "Determines which schemas to use and which command flows to invoke. Software uses logbook_software_schema.json + software_manifest_schema.json. General uses logbook_general_schema.json + general_manifest_schema.json. Agentic uses agentic_manifest_schema.json and the agentic branch of manifest-create/blueprint-create/rules-create commands; logbook-create/logbook-update/objectives-implement and the 4 defense layers (A inline rules + B banner + C post-impl audit + D logbook integrity audit) are agnostic and apply identically to all three types."
         },
         "is_project_known_by_user": {
           "type": "boolean",

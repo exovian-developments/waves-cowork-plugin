@@ -37,7 +37,7 @@ Waves gives Claude the complete product lifecycle:
 - **Roadmap** → Plan delivery in phases with milestones
 - **Logbook** → Track implementation with objectives and session continuity
 
-It supports software projects (any language/framework) and general projects (academic, creative, business).
+It supports **software** projects (any language/framework), **general** projects (academic, creative, business), and **agentic** projects (orchestrations of subagents with skills, hooks, tools, state contracts and pipelines — empirically validated with 3 cases). Includes `governing_principles` as the universal anchor of the organizational governance chain (company_blueprint → ecosystem rules → local rules → logbooks).
 
 ## Commands
 

@@ -1,11 +1,10 @@
 ---
 description: Continuously implement logbook objectives with business-aware code generation, automatic auditing, real-time logbook updates, and context-window-aware session management.
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
-# Command: objectives-implement $ARGUMENTS
+# Command: /waves:objectives-implement
 
-You are executing the implementation command. Follow these instructions exactly.
+You are executing the waves implement command. Follow these instructions exactly.
 
 ## Your Role
 
@@ -23,27 +22,32 @@ You are the orchestrator AND executor for code implementation with compliance ve
 
 **IMPORTANT: Do NOT delegate implementation or auditing to subagents. Execute all steps directly in the main agent to preserve full context (project rules, manifest, resolved decisions, prior objectives, business context). Subagents lose accumulated context and can produce code that contradicts project conventions.**
 
-## Step -1: Prerequisites Check
+## Step -1: Prerequisites Check (CRITICAL)
 
 1. Check if `ai_files/user_pref.json` exists
-   - IF NOT EXISTS → Show error, EXIT
+   - IF NOT EXISTS → Show error, suggest `/waves:project-init`, EXIT
 
 2. Read `user_pref.json`:
-   - Extract `preferred_language`
-   - Extract `project_type`
+   - Extract `user_profile.preferred_language`
+   - Extract `project_context.project_type`
 
-3. IF `project_type !== "software"`:
+3. IF `project_type !== "software"` AND `project_type !== "agentic"`:
    ```
-   ⚠️ This command is only available for software projects.
+   ⚠️ This command is only available for software and agentic projects.
 
    Your project is configured as: [project_type]
 
-   To change this, reinitialize the project.
+   General projects use /waves:logbook-update with the 'audit' token instead.
+
+   To change project type, run:
+   /waves:project-init
    ```
    → EXIT
 
+   **Why agentic projects qualify:** the "code" of an agentic project is markdown skill files, JSON hook configurations, and prompt files. The 4 defense layers (A inline rules + B banner + C post-impl audit + D logbook integrity audit) and the orthogonality reviewer operate on diff vs rules, which works the same regardless of whether the diff is Dart code or a skill markdown file. Logbook scope.files for an agentic project points to skill/hook/config files; scope.rules references categories from project_rules.json (which for agentic typically includes orchestration, prompt_engineering, tool_use, governance, etc.).
+
 4. Check if `ai_files/project_manifest.json` exists
-   - IF NOT EXISTS → Show error, EXIT
+   - IF NOT EXISTS → Show error, suggest `/waves:manifest-create`, EXIT
 
 5. Check if `ai_files/project_rules.json` exists
    - IF NOT EXISTS → Show warning (will proceed without rules validation)
@@ -88,17 +92,23 @@ Scan `ai_files/waves/*/logbooks/` directories for `.json` files.
 A logbook defines your task objectives and guides implementation.
 
 To create one, run:
-  logbook-create [filename]
+  /waves:logbook-create [filename]
 
 Example:
-  logbook-create TICKET-123.json
+  /waves:logbook-create TICKET-123.json
 ```
 → EXIT
 
 **IF logbooks exist:**
 
-Display available logbooks with status summary, showing which wave each belongs to:
+For each logbook, read and extract:
+- ticket.title
+- Count of main objectives
+- Count of active/not_started objectives
+- Last modified date (from file system)
+- Which wave the logbook belongs to (from its path)
 
+Display:
 ```
 📚 Available logbooks:
 
@@ -119,7 +129,29 @@ Choose:
 
 ### Step 1.3: Handle Selection
 
-Read user input and load corresponding logbook.
+Read user input.
+
+**IF number 1-N:**
+- Load corresponding logbook
+- Go to Step 2
+
+**IF filename string:**
+- Validate exists in `ai_files/waves/*/logbooks/`
+- IF exists → Load and go to Step 2
+- IF not → Show error, repeat Step 1.2
+
+**IF "c" or "create":**
+```
+To create a new logbook, run:
+  /waves:logbook-create [filename]
+
+Example:
+  /waves:logbook-create TICKET-456.json
+```
+→ EXIT
+
+**IF "q" or "quit":**
+→ EXIT
 
 ## Step 2: Display Logbook Status
 
@@ -141,7 +173,6 @@ Load the selected logbook and display:
 Find the first main objective that is `active` or has `not_started` secondary objectives.
 
 Display its secondary objectives:
-
 ```
 📝 Secondary Objectives for Main #[N]:
 ┌─────┬────────────────────────────────────────────────┬─────────────┐
@@ -149,8 +180,16 @@ Display its secondary objectives:
 ├─────┼────────────────────────────────────────────────┼─────────────┤
 │ 1.1 │ [secondary.content truncated]                  │ [icon] [status] │
 │ 1.2 │ [secondary.content truncated]                  │ [icon] [status] │
+│ 1.3 │ [secondary.content truncated]                  │ [icon] [status] │
 └─────┴────────────────────────────────────────────────┴─────────────┘
 ```
+
+**Status icons:**
+- ⚪ not_started
+- 🟡 active
+- 🔴 blocked
+- 🟢 achieved
+- ⚫ abandoned
 
 ## Step 3: Select Objective
 
@@ -173,7 +212,7 @@ Choose:
    ✅ All objectives are completed!
 
    Consider running:
-     resolution-create [logbook]
+     /waves:resolution-create [logbook]
 
    to generate a resolution summary.
    ```
@@ -207,23 +246,55 @@ Display:
 3. **Load product blueprint (CRITICAL for business alignment):**
    - Search for `ai_files/blueprint.json`
    - IF EXISTS:
-     - Identify which **capability**, **user_flow**, **system_flow**, or **view** relates to the current objective
-     - Extract: description, $comment, is_essential flag, acceptance_criteria, related design_principles and product_rules
+     - Read the full blueprint
+     - Identify which **capability**, **user_flow**, **system_flow**, or **view** relates to the current objective (match by name, description, or scope files overlap)
+     - Extract for the matched element:
+       - `description` and `$comment` (what it does and why)
+       - `is_essential` flag (if true, this is revenue-critical — extra care needed)
+       - `acceptance_criteria` (what "done" looks like from business perspective)
+       - Related `design_principles` and `product_rules`
      - Store as `business_context`
    - IF NOT EXISTS: Set `business_context = null`, continue normally
 
-   **Why this matters:** The agent must understand WHAT the business wants to achieve, not just WHAT code to write. Essential capabilities are revenue-critical — implementation must be thorough and aligned with the blueprint's intent.
+   **Why this matters:** The agent must understand WHAT the business wants to achieve, not just WHAT code to write. A capability marked `is_essential: true` means the business cannot generate revenue without it — implementation must be thorough and aligned with the blueprint's intent.
 
-4. **Load additional product context files:**
+4. **Load additional product context files (if not already loaded in logbook creation):**
    - Search for `ai_files/technical_guide.md` → Extract relevant sections
-   - Search for `ai_files/feasibility.json` → Extract relevant context
+   - Search for `ai_files/feasibility.json` → Extract relevant buyer personas, essential capabilities
    - Load the roadmap from the SAME wave as the selected logbook: if the logbook is at `ai_files/waves/w1/logbooks/X.json`, read `ai_files/waves/w1/roadmap.json` → Extract current phase context, milestone status, and decisions
-   - For each file NOT found: Skip silently.
+   - For each file NOT found: Skip silently. Do NOT stop or error.
 
 5. **Parse completion guide:**
-   - Extract file references and rule references
+   - For each item in `current_objective.completion_guide`:
+     - If references file:line → Add to `reference_files`
+     - If references rule # → Ensure rule is in `applicable_rules`
 
-6. **Build context object**
+6. **Build context object:**
+```json
+{
+  "objective": {
+    "id": "[current_objective.id]",
+    "content": "[current_objective.content]",
+    "completion_guide": ["..."]
+  },
+  "business_context": {
+    "related_capability": "[capability name or null]",
+    "is_essential": true|false,
+    "business_intent": "[what the business wants to achieve]",
+    "acceptance_criteria": ["..."],
+    "design_principles": ["..."]
+  },
+  "rules": [...applicable_rules...],
+  "manifest_summary": {
+    "framework": "[from manifest]",
+    "patterns": ["..."],
+    "relevant_layers": ["..."]
+  },
+  "reference_files": [
+    { "path": "...", "purpose": "..." }
+  ]
+}
+```
 
 Display:
 ```
@@ -239,6 +310,53 @@ Display:
 
 ## Step 5: Implement Code Directly
 
+### Sibling primaries banner (mandatory when logbook has 2+ main objectives)
+
+When the logbook has more than one main objective, the work is decomposed into orthogonal dimensions (per the `orthogonality_review` resolved decision in Step A2.5 of `logbook-create`). Before any code, print:
+
+```
+═══ Decomposition context ═══
+Implementing primary [N] of [TOTAL]:
+  • Primary 1: "[content]" — [DONE | DEFERRED]
+  • Primary 2 (THIS): "[content]"
+  • Primary 3: "[content]" — [DEFERRED]
+
+This objective addresses ONE dimension. Do NOT anticipate work that belongs to deferred primaries. Do NOT modify scope.files of primaries marked DONE except where strictly necessary for this primary's success.
+═══════════════════════════════════
+```
+
+Build the list dynamically from `logbook.objectives.main` ordered by id. For each sibling, derive the state:
+- DONE if status is `achieved` or `completed`
+- THIS if it is `current_objective`
+- DEFERRED otherwise
+
+If the logbook has only one main objective, **skip this banner entirely** — there is no decomposition to scope around.
+
+### Rules-in-scope banner (mandatory)
+
+Before doing ANY implementation work, print the full text of every rule that applies to this objective. The IDs alone are insufficient — rules are not constraints if they are not present in the active context.
+
+For the current objective, look up `current_objective.scope.rules` (for main objectives) or the parent main's `scope.rules` (for secondary objectives). For each rule ID, look up the full text in `project_rules.json` and print:
+
+```
+═══ Rules in scope for this objective ═══
+#3 [<category>, <scope>]: <full rule description>
+#7 [<category>, <scope>]: <full rule description>
+#12 [<category>, <scope>]: <full rule description>
+═══════════════════════════════════════════
+```
+
+If `scope.rules` is empty for this objective, print:
+```
+═══ Rules in scope for this objective ═══
+(no rules in scope — apply framework defaults + YAGNI)
+═══════════════════════════════════════════
+```
+
+This banner is **not optional**. Skipping it is the single biggest reason rules drift in frontend code where the implementation context is dense and rule violations are not caught by AST or tests. The banner makes the constraints physically present at the moment of writing code.
+
+### Implementation
+
 Display:
 ```
 🤖 Starting implementation...
@@ -252,9 +370,9 @@ Business context: [capability/flow name] — [business_intent summary]
 **Execute the implementation directly (no subagents).** Using the context from Step 4:
 
 1. **Read all reference files** from the completion guide
-2. **Read applicable project rules** to ensure compliance during writing
+2. **Treat every rule in the banner as a hard constraint.** Each line of code you write must comply with all rules in scope. If a rule seems to conflict with a completion_guide step, stop and surface the conflict instead of silently choosing one.
 3. **If business_context exists**, keep the business intent in mind:
-   - Code should fulfill the capability's acceptance_criteria
+   - Code should fulfill the capability's acceptance_criteria, not just the technical objective
    - For essential capabilities: be thorough, cover edge cases, ensure robustness
    - Apply blueprint's design_principles alongside project_rules
 4. **Implement the code** following:
@@ -266,7 +384,7 @@ Business context: [capability/flow name] — [business_intent summary]
    - Files created (+) and modified (-)
    - Patterns applied
    - Any discoveries, deviations, or impediments found
-   - **Business-impact findings**: anything that could affect a capability's behavior
+   - **Business-impact findings**: anything that could affect a capability's behavior (essential or not)
 6. **Run `dart analyze`** (or equivalent for the project) to verify no errors
 
 Store the implementation results as `change_manifest`:
@@ -343,11 +461,14 @@ IF `audit_response.compliant === true`:
 Rules verified:
   [For each rule_id in audit_response.rules_checked:]
   ✓ Rule #[id]: [rule.content summary]
+
+  [If rules_skipped:]
+  ○ Rule #[id]: Skipped - [reason]
 ```
 
 → Go to Step 9
 
-### Step 8B: Non-Compliant (Retry Loop)
+### Step 8B: Non-Compliant (Retry)
 
 IF `audit_response.compliant === false`:
 
@@ -359,9 +480,7 @@ IF `audit_response.compliant === false`:
      [finding.issue]
 ```
 
-**CRITICAL: Implement → Audit → Fix Loop**
-
-IF retry_count < 3:
+**IF retry_count < 3:**
 ```
 🔄 Attempting automatic fix... (Attempt [retry_count + 1]/3)
 ```
@@ -398,7 +517,7 @@ Choose [1-3]:
 **IF "2":**
 - List files that need fixes
 - Instruct user to fix manually
-- Offer to re-run: "Run objectives-implement [logbook] when ready"
+- Offer to re-run audit after: "Run /waves:implement [logbook] when ready"
 - EXIT
 
 **IF "3":**
@@ -425,6 +544,8 @@ Choose [1-3]:
 
 ### Step 9.2: Process Implementation Findings
 
+Extract valuable context from `change_manifest.implementation_findings`:
+
 For each category in implementation_findings, create context entries:
 
 | Finding Type | Context Entry Format |
@@ -437,37 +558,47 @@ For each category in implementation_findings, create context entries:
 
 ### Step 9.3: Insert Business-Impact Findings into recent_context (CRITICAL)
 
-**For each finding that could affect a business capability, insert a dedicated recent_context entry.** These entries persist across sessions.
+**For each finding that could affect a business capability, insert a dedicated recent_context entry.** These entries are designed to persist across sessions and help future agents understand code-level decisions that have business consequences.
 
 **Insert a business-impact entry when:**
-- A code change affects the behavior of a capability from the blueprint
+- A code change affects the behavior of a capability from the blueprint (essential or not)
 - A dependency was upgraded/added that could affect system stability
 - An architecture pattern was deviated from, creating a new precedent
 - A bug or edge case was discovered that could affect user-facing behavior
 - A performance characteristic was found that could affect user experience
 
-**Format:**
+**Format for business-impact recent_context entries:**
 ```json
 {
   "id": [next_id],
   "created_at": "[now UTC]",
-  "content": "⚡ BUSINESS IMPACT: [description]. Capability: [name]. Essential: [yes/no]. Files: [files]. Action needed: [none/monitor/review/fix in next session]."
+  "content": "⚡ BUSINESS IMPACT: [concise description of what happened and why it matters]. Capability: [capability name or 'general']. Essential: [yes/no]. Files: [affected files]. Action needed: [none/monitor/review/fix in next session]."
 }
+```
+
+**Examples:**
+```
+⚡ BUSINESS IMPACT: ProductService.getById() now includes soft-deleted products in query — this could show unavailable products to buyers. Capability: product-catalog. Essential: yes. Files: src/services/ProductService.ts:45. Action needed: fix in next session.
+```
+```
+⚡ BUSINESS IMPACT: Added retry logic to PaymentGateway.charge() with 3 attempts and exponential backoff. Capability: checkout-flow. Essential: yes. Files: src/services/PaymentGateway.ts. Action needed: none (improvement).
 ```
 
 ### Step 9.4: Handle New Objectives Suggested (Autonomous)
 
 IF `implementation_findings.new_objectives_suggested` is not empty:
-- **Add automatically** as `not_started` secondary objectives
+- **Add automatically** as `not_started` secondary objectives in the logbook
 - Do NOT ask user for approval (follows autonomy principle)
-- Note in recent_context
+- Note in recent_context: "Added [N] follow-up objectives from implementation of [objective.id]: [brief list]"
 
 ### Step 9.5: Store Recommendations
 
 IF `implementation_findings.recommendations` is not empty:
-Add to logbook's `recommendations` array.
+Add to logbook's `recommendations` array (create if doesn't exist).
 
 ### Step 9.6: Create Comprehensive Context Entry
+
+Build a context entry summarizing the implementation:
 
 ```
 Implemented [objective.id]: [objective.content].
@@ -475,6 +606,8 @@ Files: [+created] [-modified].
 [If business_context:] Business alignment: [capability name] ([essential/non-essential]).
 [If discoveries:] Discovered: [key discovery].
 [If deviations:] Deviated: [main deviation reason].
+[If impediments resolved:] Resolved: [impediment].
+[If new objectives added:] Added [N] follow-up objectives.
 Audit: [status].
 ```
 
@@ -486,6 +619,7 @@ Save the updated logbook.
   ✓ Objective [id] marked as achieved
   [✓ Main objective #[N] completed! (if applicable)]
   ✓ [N] context entries added
+  [✓ [M] follow-up objectives added (if any)]
   ✓ Logbook saved
 
 📊 Progress for Main #[N]:
@@ -495,45 +629,75 @@ Save the updated logbook.
 
 ## Step 10: Continuous Implementation Loop (AUTO-CONTINUE)
 
-**The agent does NOT ask the user whether to continue.** It automatically proceeds to the next objective.
+**The agent does NOT ask the user whether to continue.** It automatically proceeds to the next objective until one of these conditions is met:
 
 ### Stop Conditions (check after EVERY objective completion):
 
-1. **Context window exhaustion:** If remaining context ≤ 7% of total session capacity → stop, go to Final Summary
-2. **All objectives completed:** No more `not_started` or `active` secondary objectives remain
-3. **Blocking impediment:** An impediment prevents further implementation
+1. **Context window exhaustion:** If the remaining context window is ≤ 7% of the total session capacity (e.g., ≤ 14,000 tokens for a 200,000-token session), the agent MUST stop and go to Final Summary. This preserves enough context to save the logbook cleanly.
+
+2. **All objectives completed:** No more `not_started` or `active` secondary objectives remain.
+
+3. **Blocking impediment:** An impediment was found that prevents further implementation (e.g., missing dependency, broken build that can't be auto-fixed).
 
 ### Auto-Continue Logic:
 
-**IF more objectives AND context > 7% AND no blocking impediment:**
+**IF more objectives exist AND context window > 7% AND no blocking impediment:**
 ```
 🔄 Auto-continuing to next objective...
 
 🎯 Next: [next_objective.id]: [next_objective.content]
+[If business_context:] Business context: [capability/flow name]
 ```
 - Set `current_objective` to next objective
 - Reset retry_count = 0
-- Go to Step 4
+- Go to Step 4 (context will be partially reloaded — manifest and rules are already in memory, only new reference files need reading)
 
-**IF context ≤ 7%:**
+**IF context window ≤ 7%:**
 ```
-⏸️ Context window reaching limit. Saving progress and stopping.
+⏸️ Context window reaching limit (~[remaining]% remaining).
+Saving progress and stopping to preserve session integrity.
 ```
 → Go to Final Summary
 
-**IF all done:**
+**IF all objectives completed:**
 ```
-🎉 All objectives complete! Consider running: resolution-create [logbook]
+🎉 All objectives for this logbook are complete!
+
+Consider running:
+  /waves:resolution-create [logbook]
+
+to generate a resolution summary for your ticket.
 ```
 → Go to Final Summary
 
 **IF blocking impediment:**
 ```
-🔴 Blocking impediment: [description]. Progress saved.
+🔴 Blocking impediment detected:
+  [impediment description]
+
+Progress saved. Resume with:
+  /waves:objectives-implement [logbook]
 ```
 → Go to Final Summary
 
 ## Final Summary
+
+**MANDATORY: Before showing the summary, update the roadmap.**
+
+Find the roadmap for the same wave as this logbook (`ai_files/waves/[wN]/roadmap.json`).
+Add a `decisions` entry recording the session outcome:
+
+```json
+{
+  "id": [next_id],
+  "created_at": "[now UTC]",
+  "decision": "[AUTO] Session ended for [logbook]: [X] objectives completed this session, [Y]/[Z] total. Stop reason: [reason]. Next pending: [objective description or 'none']."
+}
+```
+
+If ALL objectives in the logbook are complete, also check if the associated milestone in the roadmap should be updated to "completed".
+
+Then show the summary:
 
 ```
 ✅ Implementation session complete!
@@ -547,12 +711,31 @@ Save the updated logbook.
   • Stop reason: [all done | context limit | impediment]
 
 📋 Logbook: ai_files/waves/[wN]/logbooks/[filename]
+📋 Roadmap updated: ai_files/waves/[wN]/roadmap.json
 
 [If objectives remain:]
-🎯 Next pending: [next_objective.id]: [content]
+🎯 Next pending objective: [next_objective.id]: [content]
 
 💡 Continue in next session:
-  objectives-implement [filename]
+  /waves:objectives-implement [filename]
 ```
+
+---
+
+## Subagents
+
+This command does NOT use subagents. All steps (implementation, auditing, retry fixes) are executed directly by the main agent to preserve full context and avoid deviations from project conventions and resolved decisions.
+
+---
+
+## Error Handling
+
+| Error | Action |
+|-------|--------|
+| Logbook not found | Show available logbooks |
+| No objectives available | Suggest resolution-create |
+| Implementer fails | Offer retry/skip/quit |
+| Auditor fails | Skip audit with warning |
+| Max retries | Offer accept/manual/abort |
 
 END OF COMMAND

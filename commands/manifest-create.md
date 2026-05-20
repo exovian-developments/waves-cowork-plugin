@@ -1,15 +1,14 @@
 ---
-description: Analyze project and create structured manifest
-allowed-tools: Read, Write, Glob, Grep, Bash, Task
+description: Analyze project and create structured manifest. Supports software projects (with code analysis) and general projects (academic, creative, business).
 ---
 
-# Plugin Command: manifest-create
+# Command: /waves:manifest-create
 
-You are executing the waves plugin manifest creation command. Follow these instructions exactly.
+You are executing the waves manifest creation command. Follow these instructions exactly.
 
 ## Your Role
 
-You are the main orchestrator for project manifest creation. Based on the project type and user familiarity, guide the appropriate flow to generate a comprehensive project manifest. For heavy analysis, launch specialized agents via the Task tool to work in parallel.
+You are the main orchestrator for project manifest creation. Based on the project type and user familiarity, you will guide the appropriate flow to generate a comprehensive project manifest.
 
 ## Step -1: Prerequisites Check (CRITICAL)
 
@@ -22,7 +21,7 @@ IF NOT EXISTS, display:
 The file ai_files/user_pref.json was not found.
 
 Please run first:
-project-init
+/waves:project-init
 
 This command will configure your preferences and project context,
 which are required before creating the manifest.
@@ -42,7 +41,7 @@ If any required field is missing:
 Your ai_files/user_pref.json is missing required fields.
 
 Please run:
-project-init
+/waves:project-init
 
 to complete the configuration.
 ```
@@ -54,7 +53,7 @@ to complete the configuration.
 
 Display in user's language:
 ```
-📘 Command: manifest-create
+📘 Command: /waves:manifest-create
 
 This command will analyze your project and create a complete manifest with:
 • Project information and context
@@ -80,13 +79,13 @@ IF EXISTS:
 File found: [file_path]
 
 Options:
-1. Stop (use manifest-update instead)
+1. Stop (use /waves:manifest-update instead)
 2. Continue (overwrites existing file)
 
 Choose 1 or 2:
 ```
 
-IF "1" → Exit: "No changes made. Use manifest-update to update existing manifest."
+IF "1" → Exit: "No changes made. Use /waves:manifest-update to update existing manifest."
 IF "2" → Continue with warning: "⚠️ The file will be overwritten when complete"
 
 ## Step 2: Route to Appropriate Flow
@@ -95,6 +94,7 @@ Read `project_type` from user_pref.json:
 
 IF `project_type === "software"` → Go to **FLOW A: SOFTWARE**
 IF `project_type === "general"` → Go to **FLOW B: GENERAL**
+IF `project_type === "agentic"` → Go to **FLOW C: AGENTIC**
 
 ---
 
@@ -236,7 +236,7 @@ Create `ai_files/project_manifest.json` with:
   [initialization command]
 
   Then run:
-  rules-create
+  /waves:rules-create
 
   This command will establish coding conventions and
   structure for each layer of your architecture.
@@ -244,9 +244,9 @@ Create `ai_files/project_manifest.json` with:
 
 ---
 
-## FLOW A2.1: EXISTING SOFTWARE — KNOWN PROJECT
+## FLOW A2.1: EXISTING SOFTWARE - KNOWN PROJECT
 
-The user knows the project. Use 2 checkpoint questions + 6 parallel analyzers via Task tool.
+The user knows the project. Use 2 checkpoint questions + 6 parallel analyzers.
 
 **Phase 1: Auto-Detection (Silent)**
 
@@ -291,7 +291,7 @@ Choose 0-2:
 Choose 0-7:
 ```
 
-**Phase 3: Deep Analysis via Task Tool**
+**Phase 3: Deep Analysis**
 
 Display:
 ```
@@ -308,20 +308,14 @@ This will take a moment. The agents will analyze:
 Starting analysis...
 ```
 
-Using the Task tool, invoke these 6 agents **in parallel**:
+Using the Task tool, invoke these 6 subagents **in parallel**:
 
-1. **entry-point-analyzer** - Find main entry points, trace execution flows
-2. **navigation-mapper** - Map routes and pages (frontend components and navigation)
-3. **flow-tracker** - Map API endpoints, data flows, backend structure
-4. **dependency-auditor** - Audit dependencies, categorize by type
-5. **architecture-detective** - Detect architecture patterns and principles
-6. **feature-extractor** - Extract user-facing features and capabilities
-
-Create a Task with all 6 agents to run in parallel:
-```
-Launch agents entry-point-analyzer, navigation-mapper, flow-tracker, dependency-auditor,
-architecture-detective, feature-extractor in parallel to analyze project structure.
-```
+1. **entry-point-analyzer** - Find main entry points
+2. **navigation-mapper** - Map routes and pages (frontend)
+3. **flow-tracker** - Map API endpoints (backend)
+4. **dependency-auditor** - Audit dependencies
+5. **architecture-detective** - Detect architecture patterns
+6. **feature-extractor** - Extract user-facing features
 
 Wait for all to complete.
 
@@ -424,16 +418,16 @@ Patterns detected:
 🎯 Next step:
 
   Establish code rules by layer:
-  rules-create [layer]
+  /waves:rules-create [layer]
 
   Available layers: [layer1], [layer2], [layer3]
 ```
 
 ---
 
-## FLOW A2.2: EXISTING SOFTWARE — UNKNOWN PROJECT
+## FLOW A2.2: EXISTING SOFTWARE - UNKNOWN PROJECT
 
-The user doesn't know the project. Zero questions, progress prints, use 6 parallel analyzers via Task tool, educational output.
+The user doesn't know the project. Zero questions, progress prints, educational output.
 
 Display:
 ```
@@ -443,7 +437,7 @@ without asking questions. I'll show progress as I analyze.
 This will take a few minutes...
 ```
 
-**Run parallel analysis same as A2.1 but with progress prints:**
+**Run the same analysis as A2.1 but with progress prints:**
 
 ```
 📂 Analyzing project structure...
@@ -460,8 +454,7 @@ This will take a few minutes...
 
 🏗️ Identifying architecture and patterns...
 ```
-
-Launch the same 6 agents via Task tool in parallel as in A2.1.
+[Continue with all phases...]
 
 **Display comprehensive educational output** explaining:
 - Architecture type and layers
@@ -518,10 +511,10 @@ Is this correct?
 
 Ask 5 questions:
 
-1. **Research Topic** - What is your research about?
+1. **Research Topic**
 2. **Methodology** (Qualitative, Quantitative, Mixed, Literature review)
-3. **Theoretical Framework** - What theories or frameworks guide your research?
-4. **Timeline/Milestones** - Key dates and deliverables
+3. **Theoretical Framework**
+4. **Timeline/Milestones**
 5. **Citation Format** (APA, MLA, Chicago, IEEE, etc.)
 
 Generate `ai_files/general_manifest.json` with research structure.
@@ -532,11 +525,11 @@ Generate `ai_files/general_manifest.json` with research structure.
 
 Ask 5 questions:
 
-1. **Concept/Brief** - Describe your creative vision
-2. **Visual/Artistic Style** - What's the visual direction?
-3. **Color Palette/References** - Key colors and inspiration
-4. **Assets Needed** - Images, videos, music, etc.
-5. **Deliverables/Milestones** - What's the end product?
+1. **Concept/Brief**
+2. **Visual/Artistic Style**
+3. **Color Palette/References**
+4. **Assets Needed**
+5. **Deliverables/Milestones**
 
 Generate `ai_files/general_manifest.json` with creative structure.
 
@@ -546,15 +539,15 @@ Generate `ai_files/general_manifest.json` with creative structure.
 
 Ask 9 Business Model Canvas questions:
 
-1. **Value Proposition** - What value do you provide?
-2. **Customer Segments** - Who are your customers?
-3. **Channels** - How do you reach them?
-4. **Revenue Streams** - How do you make money?
-5. **Cost Structure** - What are your main costs?
-6. **Key Resources** - What do you need?
-7. **Key Activities** - What do you do?
-8. **Key Partnerships** - Who do you work with?
-9. **Customer Relationships** - How do you interact?
+1. **Value Proposition**
+2. **Customer Segments**
+3. **Channels**
+4. **Revenue Streams**
+5. **Cost Structure**
+6. **Key Resources**
+7. **Key Activities**
+8. **Key Partnerships**
+9. **Customer Relationships**
 
 Generate `ai_files/general_manifest.json` with business canvas structure.
 
@@ -564,11 +557,11 @@ Generate `ai_files/general_manifest.json` with business canvas structure.
 
 Ask 5 generic questions:
 
-1. **Project Name** - What's it called?
-2. **Description** - Brief overview
-3. **Main Objectives** - What are you trying to achieve?
-4. **Expected Deliverables** - What's the output?
-5. **Milestones/Timeline** - Key dates
+1. **Project Name**
+2. **Description**
+3. **Main Objectives**
+4. **Expected Deliverables**
+5. **Milestones/Timeline**
 
 Generate `ai_files/general_manifest.json`.
 
@@ -576,14 +569,9 @@ Generate `ai_files/general_manifest.json`.
 
 ## FLOW BE: EXISTING GENERAL PROJECT
 
-**Phase 1: Directory Discovery via Task Tool**
+**Phase 1: Directory Discovery**
 
-Display:
-```
-📂 Analyzing your project structure...
-```
-
-Using Task tool, invoke **general-scanner** agent:
+Using Task tool, invoke **general-project-scanner**:
 - Map all directories (exclude hidden, node_modules, .git)
 - Count files by extension
 - Categorize by type
@@ -609,9 +597,9 @@ Display structure and summary:
 Choose 1 or 2:
 ```
 
-**Phase 3: Analysis via Task Tool**
+**Phase 3: Parallel Analysis**
 
-Using Task tool, invoke agents to analyze selected scope in parallel.
+Using Task tool, invoke **directory-analyzer** subagents in parallel (one per directory).
 
 Show progress as each completes:
 ```
@@ -670,10 +658,326 @@ Generate `ai_files/general_manifest.json` populated with discovered content.
 
 ---
 
+# FLOW C: AGENTIC PROJECTS
+
+Agentic projects are products whose value is an orchestration of agents/subagents with skills, hooks, tools, and configurations — not traditional software, not academic content. Examples: a corpus pipeline orchestrated by Claude Code + Claude Browser + Claude Desktop; a customer operations hub coordinating triage/drafter/escalation subagents; a compliance center monitoring regulatory feeds. The manifest captures the orchestration structure across 15 sections defined in `agentic_manifest_schema.json`.
+
+## Step C1: Determine Project State
+
+Ask user:
+```
+🎯 According to your preferences, I detected:
+• Project state: [New (from scratch) | Existing]
+
+Is this correct?
+
+1. Confirm (use detected)
+2. Change (select manually)
+```
+
+IF "2" → Ask:
+```
+1. New agentic project - starting orchestration design from scratch
+2. Existing agentic project - skills/hooks/configurations already exist on disk
+
+Choose 1 or 2:
+```
+
+**Route:**
+- New project → Go to **FLOW C1: NEW AGENTIC**
+- Existing project → Go to **FLOW C2: EXISTING AGENTIC**
+
+---
+
+## FLOW C1: NEW AGENTIC PROJECT
+
+The agent walks the user through 6 elicitation groups covering all 15 schema sections. Each prompt is concrete and offers examples drawn from real cases (pilot exobase_med_corpus, projected Customer Operations Hub, projected Compliance Operations Center). The user can skip any optional section by typing `skip` — the field is omitted from the manifest.
+
+### Step C1.1: Project Identity (covers schema sections: project)
+
+Ask:
+```
+📌 1/6 — Project identity
+
+What is the project's name, codename (optional, short ecosystem reference), and a one-paragraph description of its purpose: what does it orchestrate, for whom, to achieve what outcome?
+
+Also: what kind of agentic project is this? Free string — common values seen in the wild:
+  - 'pipeline' (ingestion/transformation, like exobase_med_corpus)
+  - 'assistant' (interactive conversational, like a customer support hub)
+  - 'monitoring' (continuous surveillance + alert, like a compliance center)
+  - 'orchestration' (high-level coordinator of other agentic systems)
+  - 'research' (autonomous investigators producing reports)
+
+Or invent your own kind if none of the above fits.
+```
+
+Capture: `project.name`, `project.codename` (optional), `project.description`, `project.kind`.
+
+### Step C1.2: Orchestration (covers schema sections: orchestration, subagents)
+
+Ask:
+```
+📌 2/6 — Orchestration architecture
+
+(a) Who is the primary agent — the one the human owner talks to? Give it a role name (e.g. 'orchestrator', 'CS Hub', 'Compliance Center'). This name will be referenced from the roles section in Step C1.3.
+
+(b) What is the communication protocol between the orchestrator and subagents?
+  - async_file_based: subagents write outputs to files, others read. Scales well to many parallel subagents when combined with single-writer-per-file. RECOMMENDED for pipelines with >5 parallel subagents.
+  - synchronous_inline: orchestrator waits for each subagent inline. Simpler, lower parallelism.
+  - event_bus: pub/sub between agents.
+  - custom: describe elsewhere.
+
+(c) What is the write-ownership policy?
+  - single_writer_per_file: each file has exactly one writer (prevents collisions by construction).
+  - lock_based: explicit lock acquisition before write.
+  - append_only_log: writers only append, never modify.
+  - custom.
+
+(d) Are there approval gates? An approval gate is a decision that requires approval (human or graduated condition) before execution. Example from compliance: 'freeze_transaction' gate with auto_approve_when='confidence > 0.95 AND amount < 10000', fallback='human_approval'. List each gate with: name, action, auto_approve_when (free-form condition), fallback (human_approval | block | log_only).
+
+(e) Subagents lifecycle:
+  - ephemeral: subagents spawn per task and die at completion (state persisted in disk contracts). Most common.
+  - persistent: subagents live in background with their own state.
+  - hybrid: mix (e.g. one listener is persistent, extractors are ephemeral).
+
+(f) Where will per-subagent logbooks live? (default: `ai_files/waves/wN/subagent_logbooks/`)
+```
+
+Capture: `orchestration.primary_agent.role_ref`, `orchestration.primary_agent.talks_to_owner` (default true), `orchestration.communication_protocol`, `orchestration.write_ownership_policy`, `orchestration.approval_gates[]`, `subagents.lifecycle`, `subagents.logbooks_dir`.
+
+### Step C1.3: Roles, Skills, Tools (covers schema sections: roles, skills, tools)
+
+Ask:
+```
+📌 3/6 — Roles, skills, and tools
+
+(a) Roles: list each role the primary agent orchestrates. For each role:
+  - name (e.g. 'browser_extractor', 'ticket-triage', 'regulatory-monitor')
+  - count_pattern: '1' (singleton), 'N' (variable), or domain-specific like '1_per_specialty', '1_per_jurisdiction'
+  - tools_authorized: which tools this role may invoke (referenced from the tools list below)
+  - tools_forbidden (optional but recommended for security): tools this role MUST NOT use (e.g. 'indexer' is forbidden from 'browser')
+  - talks_to: which other roles it may communicate with (empty = only orchestrator)
+  - writes_to: paths or state_contract names this role may write (single-writer boundary)
+
+Real examples:
+  - exobase_med_corpus: 8 roles (orchestrator, browser_extractor, validator, indexer, state_updater, auditor, inspector, verifier)
+  - Customer Ops Hub: 5 roles (orchestrator, ticket-triage, response-drafter, escalation-detector, kb-curator)
+  - Compliance Center: 6 roles (orchestrator, regulatory-monitor, transaction-classifier, contract-analyzer, report-generator, exception-router)
+
+(b) Skills: where are skills stored on disk and how are they formatted?
+  - directory: e.g. `skills/`
+  - format: 'markdown_with_frontmatter' (Claude Code default), 'json_definitions', or 'code_modules'
+  - versioning_required: if true, every skill invocation records its version in output metadata (enables retrospective invalidation when extraction logic changes).
+
+(c) Tools: list every external capability available to roles. For each tool:
+  - name (e.g. 'claude_browser', 'postgres_writer', 'zendesk_mcp')
+  - kind: mcp | api | browser | filesystem | cli | custom
+  - description (optional)
+  - requires_credentials (true/false)
+  - rate_limits (optional free-form object, e.g. `{"requests_per_minute": 60}`)
+```
+
+Capture: `roles[]`, `skills.directory`, `skills.format`, `skills.versioning_required`, `tools[]`.
+
+### Step C1.4: Data Flow (covers schema sections: data_sources, state_contracts, handoff_contracts, integration_contracts)
+
+Ask:
+```
+📌 4/6 — Data flow: inputs, internal state, outputs
+
+(a) Data sources: where do inputs come from? For each source:
+  - name (e.g. 'PubMed', 'Zendesk_API', 'FINMA_website')
+  - kind: public_api | private_api | website | file_share | stream | database | custom
+  - access_mode: free string (e.g. 'api', 'scraping', 'manual_handoff', 'institutional_negotiation', 'mcp_api', 'webhook')
+  - auth_required (true/false)
+
+(b) State contracts: persistent state shared across subagent invocations. For each contract:
+  - name (e.g. 'specialties_master', 'ticket_queue', 'regulatory_queue')
+  - schema_ref: path to JSON schema defining structure (optional)
+  - volatility: stable (rarely changes) | volatile (per-invocation changes) | ephemeral (consumed after one read)
+  - writer_role: the ONE role authorized to write (enforces single-writer)
+  - partitioning: free string — 'singleton', 'by_subagent', 'by_specialty', 'by_jurisdiction', 'by_severity'
+
+(c) Handoff contracts: file-based handoffs between roles. For each:
+  - producer_role
+  - consumer_role
+  - file_pattern (e.g. `output/{source_id}.json`)
+  - schema_ref (optional)
+
+(d) Integration contracts: downstream systems that consume outputs. For each:
+  - downstream (e.g. 'facts_core', 'Slack', 'Postgres')
+  - schema_ref (optional)
+  - data_shape: concise description of what gets sent
+
+(e) Source access modes: free-string array listing the access modes used in this project's domain. Each project defines its own; do NOT use a fixed enum. Examples: `['api', 'scraping', 'manual_handoff', 'institutional_negotiation']`.
+```
+
+Capture: `data_sources[]`, `state_contracts[]`, `handoff_contracts[]`, `integration_contracts[]`, `source_access_modes[]`.
+
+### Step C1.5: Pipelines, Triggers (covers schema sections: pipelines, triggers)
+
+Ask:
+```
+📌 5/6 — Pipelines and triggers
+
+(a) Pipelines: processing flows with granular state transitions. Each transition is an atomic write — this is the resilience primitive for crash recovery. For each pipeline:
+  - name (e.g. 'corpus_ingestion', 'ticket_resolution', 'compliance_review')
+  - description
+  - stages: ordered list, each with:
+    * state name (e.g. 'pending', 'claimed', 'fetching', 'parsing', 'extracted', 'validated', 'indexed')
+    * role responsible for transitioning out of this state
+    * transitions_to: possible next states (array — supports branching like 'validated' → 'indexed' or 'rejected')
+    * stuck_threshold_seconds: if a record stays in this state longer, a verifier flags it as stuck
+
+Real example (pilot pipeline): pending → claimed → fetching → parsing → writing_output → extracted → validated → indexed → registry_updated.
+
+(b) Triggers: how and when pipelines or roles get invoked. For each trigger:
+  - kind: manual | event | schedule | agent_cascade
+  - spec: cron expression (for schedule), event name or webhook path (for event), upstream role name (for agent_cascade), free description (for manual)
+  - invokes_role: which role this trigger invokes
+```
+
+Capture: `pipelines[]`, `triggers[]`.
+
+### Step C1.6: Governance, Observability (covers schema sections: governance, observability)
+
+Ask:
+```
+📌 6/6 — Governance and observability
+
+(a) Owner escape hatch: can the human owner invoke a subagent directly, bypassing the orchestrator?
+  - enabled (true/false)
+  - audit_log_path: where direct invocations are logged (read by orchestrator at session start)
+
+(b) Scope boundaries: hard restrictions on what the system as a whole can do. Free strings. Examples: 'no email sending', 'read-only on production DB', 'no destructive Postgres operations on tx records'.
+
+(c) Budget controls:
+  - daily_max_usd: maximum total spend per day across all subagent calls
+  - per_source_rate_limits: optional list of { source, limit } entries (e.g. `[{ source: 'pubmed', limit: '60/min' }]`)
+
+(d) Observability:
+  - log_level: errors_only | errors_and_outputs (standard MVP) | decisions_full (recommended for regulated domains) | verbose
+  - audit_critical_decisions: if true, decisions tagged 'critical' by approval_gates produce dedicated audit entries regardless of log_level
+```
+
+Capture: `governance.owner_escape_hatch`, `governance.scope_boundaries[]`, `governance.budget_controls`, `observability.log_level`, `observability.audit_critical_decisions`.
+
+### Step C1.7: Generate Manifest and Validate
+
+Build the manifest JSON populating the 15 sections with the captured data. Apply these conventions:
+
+- `project` is required (name + description minimum).
+- `orchestration` is required (primary_agent.role_ref minimum).
+- `roles` is required (at least 1 entry).
+- All other sections are optional — omit if user typed `skip` or gave no data.
+
+Validate against `ai_files/schemas/agentic_manifest_schema.json` using JSON Schema validation. If validation fails, surface the specific error to the user and offer to correct it inline.
+
+Save to `ai_files/project_manifest.json` (same path used by software/general — the consuming command infers the manifest shape from `user_pref.project_context.project_type`).
+
+Present a declaration (not an approval request):
+```
+✅ Agentic manifest generated
+
+📁 ai_files/project_manifest.json
+
+Sections populated:
+  ✓ project ([kind])
+  ✓ orchestration (primary: [role_ref], [N] approval gates)
+  ✓ roles ([N] roles declared)
+  [✓ skills (directory: [path])]
+  [✓ tools ([N] tools)]
+  [✓ data_sources ([N] sources)]
+  [✓ state_contracts ([N] contracts)]
+  [✓ handoff_contracts ([N] handoffs)]
+  [✓ pipelines ([N] pipelines)]
+  [✓ integration_contracts ([N] downstream contracts)]
+  [✓ triggers ([N] triggers)]
+  [✓ governance (escape_hatch: [yes/no])]
+  [✓ observability (log_level: [level])]
+  [✓ source_access_modes: [list]]
+  [○ subagents (omitted — using defaults)]
+
+🎯 Next steps:
+  /waves:rules-create — extract project rules (agentic-default categories suggested)
+  /waves:blueprint-create — define what your agentic system delivers
+  /waves:roadmap-create — plan first wave
+```
+
+Go to **END**.
+
+---
+
+## FLOW C2: EXISTING AGENTIC PROJECT
+
+For an existing agentic project, the agent first scans the working directory for evidence of agentic structure (skills/, hooks/, .claude/, MCP configurations) and then walks the user through the same 6 elicitation groups as FLOW C1, prefilling fields where the disk scan provides defaults.
+
+### Step C2.1: Disk Scan
+
+Scan the current directory for:
+- `skills/` directory — if present, count files and detect format (look for frontmatter markers in first file).
+- `hooks/` or `.claude/hooks/` — count hook scripts.
+- `.claude/settings.json` — detect MCP servers configured.
+- `ai_files/waves/` — detect existing wave structure.
+- Any obvious `subagents/`, `agents/`, `prompts/` directories.
+
+Present findings:
+```
+🔍 Scanning for agentic structure...
+
+Found on disk:
+  [+] skills/ — [N] skill files in [format]
+  [+] .claude/hooks/ — [N] hook scripts
+  [+] .claude/settings.json — MCP servers: [list]
+  [-] No subagents/ directory
+  [-] No explicit pipelines/ directory
+
+Pre-populating where defaults are clear; you'll review each section.
+```
+
+### Step C2.2: Run Elicitation with Prefilled Defaults
+
+Run Steps C1.1 through C1.6, but for each section show pre-filled values derived from the scan:
+- skills.directory → `skills/` (from scan)
+- skills.format → detected from frontmatter presence
+- tools → derived from `.claude/settings.json` MCP servers
+- subagents.logbooks_dir → `ai_files/waves/wN/subagent_logbooks/` if `ai_files/waves/` exists
+
+The user reviews each pre-filled section and confirms or edits.
+
+### Step C2.3: Generate Manifest and Validate
+
+Same as Step C1.7.
+
+---
+
 ## Validation
 
 Before saving any manifest, validate against the appropriate schema:
-- Software: `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/software_manifest_schema.json`
-- General: `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/general_manifest_schema.json`
+- Software: `ai_files/schemas/software_manifest_schema.json`
+- General: `ai_files/schemas/general_manifest_schema.json`
+- Agentic: `ai_files/schemas/agentic_manifest_schema.json`
+
+---
+
+## Subagents Reference
+
+| Subagent | Used In | Purpose |
+|----------|---------|---------|
+| manifest-creator-new-software | A1 | Template generation |
+| manifest-creator-known-software | A2.1 | Known project analysis |
+| manifest-creator-unknown-software | A2.2 | Unknown project analysis |
+| manifest-creator-academic | B1 | Academic project setup |
+| manifest-creator-creative | B2 | Creative project setup |
+| manifest-creator-business | B3 | Business canvas setup |
+| manifest-creator-generic | B4 | Generic project setup |
+| general-project-scanner | BE | Directory discovery |
+| directory-analyzer | BE | Content analysis |
+| entry-point-analyzer | A2.1, A2.2 | Find entry points |
+| navigation-mapper | A2.1, A2.2 | Map routes |
+| flow-tracker | A2.1, A2.2 | Map API endpoints |
+| dependency-auditor | A2.1, A2.2 | Audit dependencies |
+| architecture-detective | A2.1, A2.2 | Detect patterns |
+| feature-extractor | A2.1, A2.2 | Extract features |
 
 END OF COMMAND

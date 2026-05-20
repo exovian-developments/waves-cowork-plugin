@@ -164,10 +164,28 @@
         },
         "required": ["id", "created_at", "content", "when"]
       }
-    }
-  },
+    },
 
-  "recommendations": {
+    "audit": {
+      "type": "object",
+      "description": "Integrity audit state for this logbook. Created with is_already_audited=false at logbook persistence (Step A5 of waves:logbook-create) and updated after the integrity reviewer subagent runs in Step A6.",
+      "$comment": "Required field. New logbooks initialize is_already_audited=false at Save File and the field flips to true after the integrity reviewer completes. logbook-update flips it back to false when material changes occur (new objectives, scope.rules modified, completion_guide changed) and re-runs the audit.",
+      "required": ["is_already_audited"],
+      "properties": {
+        "is_already_audited": {
+          "type": "boolean",
+          "default": false,
+          "description": "True once the integrity reviewer subagent has run on this logbook at least once and findings have been processed. Set back to false in logbook-update when material changes are made so a fresh audit runs."
+        },
+        "audit_file": {
+          "type": "string",
+          "description": "Relative path to the most recent audit report JSON, e.g. 'ai_files/waves/wN/audits/logbook-<basename>.json'. Absent until the first audit completes.",
+          "$comment": "The reviewer always overwrites the same audit file path on re-audit; if historical audits are needed, copy the file before re-running."
+        }
+      }
+    },
+
+    "recommendations": {
       "type": "array",
       "description": "Recommendations discovered during implementation. These are improvements or follow-ups that aren't blocking but should be considered.",
       "$comment": "Populated by objectives-implement command when code-implementer finds opportunities for improvement. Review periodically.",
@@ -219,7 +237,7 @@
     }
   },
 
-  "required": ["ticket", "objectives", "recent_context", "history_summary", "future_reminders"],
+  "required": ["ticket", "objectives", "recent_context", "history_summary", "future_reminders", "audit"],
 
   "$defs": {
     "main_objective": {
