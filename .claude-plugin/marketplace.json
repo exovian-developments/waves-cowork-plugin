@@ -15,7 +15,10 @@
         "url": "https://github.com/exovian-developments"
       },
       "category": "framework",
-      "source": "..",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/exovian-developments/waves-cowork-plugin.git"
+      },
       "homepage": "https://github.com/exovian-developments/waves-cowork-plugin"
     }
   ]
