@@ -45,6 +45,58 @@ if command -v jq &>/dev/null; then
   fi
 fi
 
+# --- id uniqueness (field gap, 2026-06-11): JSON Schema CANNOT express
+# per-key uniqueness inside arrays, so duplicate ids validated clean (3 real
+# collisions seen in the field — they break union-by-id merges and cross-refs).
+# Deterministic walk: any array whose items are ALL objects carrying "id" must
+# have no repeated id. Plain python3 (stdlib only); jq fallback; neither →
+# visible warning (never silently skipped).
+UNIQ_ERRS=""
+PLAIN_PY=""
+for py in python3 python3.13 python3.12 python3.11 python; do
+  command -v "$py" &>/dev/null && PLAIN_PY="$py" && break
+done
+if [ -n "$PLAIN_PY" ]; then
+  UNIQ_ERRS=$("$PLAIN_PY" - "$ARTIFACT" <<'PYUNIQ' 2>&1
+import json, sys
+data = json.load(open(sys.argv[1]))
+errs = []
+def walk(x, path):
+    if isinstance(x, list):
+        if x and all(isinstance(i, dict) and "id" in i for i in x):
+            seen = {}
+            for idx, item in enumerate(x):
+                key = (type(item["id"]).__name__, str(item["id"]))
+                if key in seen:
+                    errs.append(f"{path}: duplicate id {item['id']!r} (items {seen[key]} and {idx})")
+                else:
+                    seen[key] = idx
+        for idx, item in enumerate(x):
+            walk(item, f"{path}[{idx}]")
+    elif isinstance(x, dict):
+        for k, v in x.items():
+            walk(v, f"{path}/{k}" if path != "(root)" else f"/{k}")
+walk(data, "(root)")
+for e in errs:
+    print(e)
+PYUNIQ
+  )
+elif command -v jq &>/dev/null; then
+  UNIQ_ERRS=$(jq -r '
+    [paths as $p | getpath($p) | select(type=="array" and length>0
+       and all(.[]; type=="object" and has("id"))) | {p: $p, ids: [.[].id]}]
+    | unique_by(.p)
+    | .[] | . as $e | ($e.ids | group_by(.) | map(select(length>1)) | .[0:9][]
+       | "/\($e.p | join("/")): duplicate id \(first) (\(length) occurrences)")
+  ' "$ARTIFACT" 2>/dev/null)
+else
+  echo "waves-validate: WARNING — neither python3 nor jq available; id uniqueness NOT checked for $ARTIFACT" >&2
+fi
+if [ -n "$UNIQ_ERRS" ]; then
+  printf '%s
+' "$UNIQ_ERRS" | sed 's/^/uniqueness: /' >&2
+fi
+
 # Schema validation via python jsonschema (same mechanism the commands use).
 # Probe several interpreters: the module may live in one version's user-site
 # only (e.g. python3.11 has it while the bare python3 does not).
@@ -73,8 +125,10 @@ PYEOF
     printf '%s\n' "$ERRORS" >&2
     exit 2
   fi
+  [ -n "$UNIQ_ERRS" ] && exit 2
   exit 0
 fi
 
 echo "waves-validate: WARNING — no python interpreter with jsonschema found; only JSON well-formedness was checked for $ARTIFACT" >&2
+[ -n "$UNIQ_ERRS" ] && exit 2
 exit 0

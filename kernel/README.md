@@ -14,7 +14,10 @@ VERSION. Products bundle copies; comparing VERSION files is how a consumer
 knows its copy drifted from the source. Plugin version and kernel version are
 independent: the plugin can patch without touching the kernel, and vice versa.
 History: 0.1.0 extraction (w6 P13) → 0.2.0 field-report calibration (gate-eval
-allowlists, pre-commit sidecar/rename-aware fixes).
+allowlists, pre-commit sidecar/rename-aware fixes) → 0.3.0 upstream report from
+projects_control_center_local (jq-missing now warns visibly in every bin —
+fail-open stays, silence does not; waves-validate gains id-uniqueness checking,
+which JSON Schema cannot express).
 
 ## The self-containment contract (hard rule)
 

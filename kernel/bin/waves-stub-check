@@ -39,8 +39,9 @@ if [ -z "$TOOL_FILE" ] || [ ! -f "$TOOL_FILE" ]; then
   exit 0
 fi
 
-# Check jq disponible (fail-safe; el checker agentic lo usa para schemas)
+# Check jq disponible (fail-open VISIBLE: sin jq no hay detección de stubs)
 if ! command -v jq &> /dev/null; then
+  echo "waves-stub-check: WARNING — jq not found; stub detection skipped (failing open). Install jq." >&2
   exit 0
 fi
 

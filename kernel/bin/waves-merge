@@ -51,7 +51,11 @@ fi
 
 O="$1"; A="$2"; B="$3"; P="${4:-}"
 
-command -v jq &>/dev/null || { git merge-file "$A" "$O" "$B"; exit $?; }
+command -v jq &>/dev/null || {
+  echo "waves-merge: WARNING — jq not found; falling back to git merge-file (artifact-aware merge inactive). Install jq." >&2
+  git merge-file "$A" "$O" "$B"
+  exit $?
+}
 
 # --- Non-artifact guard: all three inputs must be valid JSON ---
 for f in "$O" "$A" "$B"; do

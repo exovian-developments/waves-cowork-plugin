@@ -47,7 +47,11 @@ done
 AI_FILES_SCOPED="${AI_FILES_SCOPED:-$AI_FILES_ROOT}"
 PROJECT_DIR="${PROJECT_DIR:-.}"
 
-command -v jq &>/dev/null || { echo '{}'; exit 0; }
+command -v jq &>/dev/null || {
+  echo "waves-gate-eval: WARNING — jq not found; the gate CANNOT evaluate and is failing OPEN (no enforcement). Install jq." >&2
+  echo '{}'
+  exit 0
+}
 
 # If no artifacts directory, allow everything
 if [ ! -d "$AI_FILES_ROOT" ]; then
