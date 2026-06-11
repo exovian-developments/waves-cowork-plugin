@@ -1,8 +1,0 @@
-#!/bin/bash
-# waves-validate — DEPRECATED SHIM (kernel 0.4.0): the rail was renamed to
-# waves-artifact-validate (the generic name said nothing about WHAT it
-# validates; the bin family follows object-action naming — stub-check,
-# gate-eval, merge-setup). This shim keeps existing consumers and bundled
-# copies working; update your calls. Removal horizon: kernel 0.6.0.
-echo "waves-validate: DEPRECATED name — use waves-artifact-validate (same contract). This shim is removed in kernel 0.6.0." >&2
-exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/waves-artifact-validate" "$@"

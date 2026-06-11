@@ -290,6 +290,21 @@ Detail lives in `commands/logbook-create.md` Phase 4 w4 section. SKILL.md only o
 
 **Governance:** the `verification` category in `project_rules.json` (universal, available for all project types) holds tunable thresholds — stub-check floors, evidence-critic opt-ins, feasibility-checker strictness per type.
 
+## waves_kernel — deterministic rails (Waves 3.1+)
+
+Every rail that needs NO LLM lives in `${CLAUDE_PLUGIN_ROOT}/kernel/bin/` as a self-contained CLI (AGPL, own VERSION; products bundle a copy). The bins and what each does:
+
+| Bin | Does |
+|---|---|
+| `waves-artifact-validate <artifact.json> --schema <schema.json>` | Validates ONE Waves artifact on three axes: JSON well-formedness, schema conformance, and **id uniqueness** inside every id-carrying array (JSON Schema cannot express that; duplicate ids break union-by-id merges). Exit 0 = valid, 2 = errors on stderr (`uniqueness:` prefix for duplicates). |
+| `waves-gate-eval` | The graduated-enforcement decision (called by the `waves-gate.sh` wrapper). |
+| `waves-stub-check --file <f> --type <t>` | Deterministic stub detection (called by the `waves-stub-check.sh` wrapper). |
+| `waves-merge` / `waves-merge-setup` | Git merge driver for artifacts (per-field, union-by-id, per-field LWW) + idempotent wiring. |
+| `waves-pre-commit` / `waves-pre-commit-install` | Commit-boundary backstop with DELTA semantics (only NEW errors block) + chaining installer. |
+| `waves-relations <manifest> [--for <name>]` | Blast-radius queries over the manifest's `relations[]` graph. |
+
+**Command convention:** when a command needs to validate an artifact against its schema, PREFER `bash "${CLAUDE_PLUGIN_ROOT}/kernel/bin/waves-artifact-validate" <artifact> --schema "${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/<schema>.json"` over inline `python3 -m jsonschema` — the kernel rail adds the id-uniqueness axis that inline jsonschema misses, and probes interpreters itself. Degradation is always VISIBLE: every bin warns on stderr when a dependency (jq, python) is missing instead of silently passing.
+
 ## Multi-project Path Resolution (Waves 3.x)
 
 > Parent repo's `waves_files/` holds company-level governance. Real products live at sibling `projects/<name>/`, each with its own `waves_files/` for its own waves artifacts. `--project <name>` flag selects which child the command operates on. Commands resolve their working path through this helper.

@@ -17,7 +17,8 @@ History: 0.1.0 extraction (w6 P13) → 0.2.0 field-report calibration (gate-eval
 allowlists, pre-commit sidecar/rename-aware fixes) → 0.3.0 upstream report from
 projects_control_center_local (jq-missing now warns visibly in every bin —
 fail-open stays, silence does not; waves-validate gains id-uniqueness checking,
-which JSON Schema cannot express; bin renamed waves-artifact-validate per the object-action convention, deprecated shim kept) → 0.4.0.
+which JSON Schema cannot express; bin renamed waves-artifact-validate per the object-action convention) → 0.4.0 → 0.5.0 (the
+deprecated waves-validate shim removed — zero consumers existed; owner call).
 
 ## The self-containment contract (hard rule)
 
@@ -77,7 +78,7 @@ Rails with no current hook home (scattered today, kernel gives them one):
 
 | Rail | Today | Kernel home |
 |---|---|---|
-| validate | commands called `python3 -m jsonschema` inline with plugin schema paths | `bin/waves-artifact-validate <artifact.json> --schema <schema.json>` (well-formedness + schema + id uniqueness; renamed from waves-validate in 0.4.0, shim kept) |
+| validate | commands called `python3 -m jsonschema` inline with plugin schema paths | `bin/waves-artifact-validate <artifact.json> --schema <schema.json>` (well-formedness + schema + id uniqueness; renamed from the too-generic waves-validate in 0.4.0) |
 | relations | `relations[]` lives in project_manifest.json, read ad hoc | `bin/waves-relations <manifest.json> [--for <file>]` |
 | merge | `bin/waves-merge` — git merge-driver (`%O %A %B %P`, writes `%A`) | per-field merge; id-arrays union-by-id; create-collisions renumbered (older keeps id); id-less arrays → 3-way set-union (concurrent appends both land, never silent loss); real same-field collision → per-field LWW by each side's last commit touching the file (theirs resolved via `GITHEAD_*` env — `MERGE_HEAD` is not yet written while a driver runs); non-JSON input → `git merge-file` fallback |
 | merge setup | `bin/waves-merge-setup [--repo <dir>]` | idempotent wiring: `[merge "waves"]` in `.git/config` (local, every clone) + routing lines in `.gitattributes` (committed, travels). Unwired repo degrades to git default merge — visible markers, never silent loss |

@@ -21,7 +21,7 @@ FAILURES=0
 fail() { echo "FAIL [$1]: $2" >&2; FAILURES=$((FAILURES+1)); }
 ok()   { echo "ok   [$1]"; }
 
-SANDBOX=$(mktemp -d /tmp/waves-validate-cases.XXXXXX)
+SANDBOX=$(mktemp -d /tmp/waves-artifact-validate-cases.XXXXXX)
 trap 'rm -rf "$SANDBOX"' EXIT
 
 cat > "$SANDBOX/schema.json" <<'EOF'
