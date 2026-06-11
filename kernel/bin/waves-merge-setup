@@ -1,0 +1,56 @@
+#!/bin/bash
+# waves-merge-setup — kernel rail: wire the waves merge-driver into a repo
+# (w6 Phase 13). Idempotent — safe to run on every upgrade/onboarding.
+#
+# Two halves of the wiring, with different travel semantics:
+#   - .gitattributes (routes artifacts to the driver) — COMMITTED, travels
+#     with the repo. This tool appends the routing lines if missing.
+#   - .git/config [merge "waves"] (driver definition) — LOCAL, does NOT
+#     travel. Every clone runs this setup once (the v3.0→v3.1 migration and
+#     the onboarding both call it).
+#
+# Usage:
+#   waves-merge-setup [--repo <dir>]     # default: current directory
+#
+# Degradation if never run: git falls back to its default merge for artifact
+# JSONs — possible <<<<<<< markers, visible and recoverable, never silent loss.
+#
+# Exit codes: 0 = wired (or already wired), 1 = not a git repo / error.
+
+set -euo pipefail
+
+REPO="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --repo) REPO="${2:-.}"; shift 2 ;;
+    --help)
+      grep '^# ' "$0" | head -18 | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) echo "waves-merge-setup: unknown argument $1" >&2; exit 1 ;;
+  esac
+done
+
+git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "waves-merge-setup: $REPO is not a git repository" >&2
+  exit 1
+}
+
+# The driver path is THIS kernel copy's waves-merge (self-introspection, not
+# external coupling — each product wires its own bundled copy).
+DRIVER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/waves-merge"
+[ -f "$DRIVER" ] || { echo "waves-merge-setup: waves-merge not found next to this tool" >&2; exit 1; }
+
+# --- Local half: [merge "waves"] in .git/config (idempotent overwrite) ---
+git -C "$REPO" config merge.waves.name "Waves artifact merge (per-field, union-by-id, per-field LWW)"
+git -C "$REPO" config merge.waves.driver "bash $DRIVER %O %A %B %P"
+
+# --- Committed half: routing lines in .gitattributes (append-if-missing) ---
+GA="$REPO/.gitattributes"
+touch "$GA"
+for line in 'waves_files/**/*.json merge=waves' 'ai_files/**/*.json merge=waves'; do
+  if ! grep -qxF "$line" "$GA" 2>/dev/null; then
+    printf '%s\n' "$line" >> "$GA"
+  fi
+done
+
+echo "waves-merge-setup: wired (driver=$DRIVER; routes in $GA — commit .gitattributes if new)"

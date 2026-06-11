@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Waves Diverged Work Schema",
+  "description": "A diverged_work is the lightweight sibling of a logbook (w6 Phase 6): a SMALL, self-contained unit of work that surfaces mid-flight — during design OR testing — and diverges from the main thread being worked. Today such work can only land as a recent_context note, invisible to the second-order corpus miner (design_principle #11). This artifact gives it a mineable home. It is NOT a logbook: no main/secondary decomposition, no orthogonality review — a single closed unit. An adversarial 3-gate audit (single_dimension / closed_scope / self_verifiable) sets disposition: executable (the object IS the subagent prompt — run it now) or promoted (too big → the object IS the seed for /waves:logbook-create). The conservative bias (doubt → promoted) is the anti-fragmentation rail: it blocks abusing diverged_work to split a task that deserves a real logbook. Agnostic to general/agentic/software.",
+  "$comment": "CANONICAL SHAPE: a single object with keys created_at, title, expected_end_state, trigger_context, scope, completion_guide, verification, audit. OPEN (never additionalProperties:false, design_principle #11) — a recurring extra key is a signal for the corpus miner, not an error. STOP: one diverged unit per file (one concern, one closed scope, one verification). If you reach for a second concern or a second verification, the audit must return promoted and this becomes a logbook seed. REDIRECT: durable strategy → the roadmap; the product WHY → the blueprint; multi-step decomposition → a logbook (objectives.main/secondary); the executed fix narrative once run → the recent_context of the parent thread, NOT back into this file. An undeclared sibling field is the signal you are writing the wrong artifact — most often a logbook. bad: adding an 'objectives' array here (that IS a logbook — set audit.disposition=promoted and run /waves:logbook-create). good: title + trigger_context + scope + completion_guide + a single verification + audit{3 gates, disposition}.",
+  "type": "object",
+  "properties": {
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when this diverged_work was surfaced."
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "One verifiable outcome this unit delivers, phrased as a result, not a task.",
+      "$comment": "STOP: ONE outcome — if it carries a '+', ' y '/' and ', a colon-list or two verbs, it is two units and the audit will return promoted. REDIRECT: the WHY it diverged → trigger_context.why_surfaced; the how → completion_guide; the proof → verification. bad: 'Arreglar el typo del $comment y de paso renombrar el archivo' (two units). good: 'El $comment de feasibility_analysis_schema.json corrige el ejemplo bad->good roto'."
+    },
+    "expected_end_state": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "What 'done' looks like once this unit is executed — the observable target a subagent or the next logbook must reach.",
+      "$comment": "STOP: describe the END STATE only (what is true after), 2-3 sentences. REDIRECT: the steps to get there → completion_guide; the deterministic check that proves it → verification; the reason it exists → trigger_context. Test: if it reads like a how-to, you wrote completion_guide here. bad: 'Abrir el archivo, buscar la línea, cambiar el ejemplo y guardar'. good: 'El $comment del campo afectado contiene un par bad->good coherente; el schema sigue meta-validando draft 2020-12.'"
+    },
+    "trigger_context": {
+      "type": "object",
+      "description": "Why this work surfaced where it did, and why it is being carved out instead of folded into the current thread. This is what makes a diverged_work traceable back to its cause — the lineage node the corpus miner and usage telemetry both attach to.",
+      "$comment": "STOP: capture the surfacing circumstance only (when/where/why-now/why-separate). REDIRECT: the work itself → title/scope/completion_guide; the parent's own content stays in the parent artifact (cite it via origin.parent_ref, do NOT re-paste it). bad: pasting the parent logbook's objective text here. good: surfaced_during 'design', origin {wave, parent_type, parent_ref}, why_surfaced + why_separate one sentence each.",
+      "properties": {
+        "surfaced_during": {
+          "type": "string",
+          "enum": ["design", "testing"],
+          "description": "Whether the divergence appeared while DESIGNING the main thread (planning a logbook, writing a schema) or while TESTING it (running a smoke, exercising a command). The two contexts diverged_work was built to cover."
+        },
+        "origin": {
+          "type": "object",
+          "description": "The parent node this work diverged from. A diverged_work can surface from a logbook, but also directly from a roadmap or a blueprint — high artifacts are atemporal and are almost always modified BY a lower work-thread, so the parent_type names which level caused it.",
+          "$comment": "STOP: identify the parent only (wave + which level + which artifact). REDIRECT: why it surfaced → why_surfaced; the work → scope/completion_guide. The parent_ref is a pointer, not a copy. bad: parent_ref holding the full roadmap decision text. good: {wave: 'w6', parent_type: 'roadmap', parent_ref: 'waves_files/waves/w6/roadmap.json#decision-10'}.",
+          "properties": {
+            "wave": {
+              "type": "string",
+              "description": "The wave during which this work surfaced (e.g. 'w6')."
+            },
+            "parent_type": {
+              "type": "string",
+              "enum": ["blueprint", "roadmap", "logbook"],
+              "description": "Which artifact level this work diverged from: a blueprint (product WHY), a roadmap (a wave plan), or a logbook (a specific task). Broadened from logbook-only because a DW can surface from a roadmap or blueprint directly."
+            },
+            "parent_ref": {
+              "type": "string",
+              "description": "A pointer to the specific parent artifact (path, optionally with an anchor). Use real package-qualified paths (naming_conventions #6).",
+              "$comment": "STOP: one pointer. REDIRECT: the parent's content stays in the parent — this only references it. bad: 'la bitácora donde estábamos trabajando ayer'. good: 'waves_files/waves/w6/logbooks/phase_7.json#secondary-3'."
+            }
+          },
+          "required": ["parent_type", "parent_ref"]
+        },
+        "why_surfaced": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "What was being done when this work appeared and why it became visible right then.",
+          "$comment": "STOP: one sentence on the surfacing moment. REDIRECT: the fix → completion_guide; the justification for separating it → why_separate. bad: a paragraph re-deriving the whole design session. good: 'Diseñando el schema de telemetría noté que el ejemplo bad->good de un campo vecino quedó invertido.'"
+        },
+        "why_separate": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Why this is carved into its own unit instead of done inline in the current thread — the honest reason it diverges (different concern, would pollute the current diff, blocks nothing now).",
+          "$comment": "STOP: one sentence justifying the divergence. REDIRECT: if the honest answer is 'it is actually several things', stop — the audit will return promoted. bad: 'porque sí, lo hago aparte'. good: 'Es un concern distinto al de la fase actual y mezclarlo ensuciaría el diff del work-thread en curso.'"
+        }
+      },
+      "required": ["surfaced_during", "origin", "why_surfaced", "why_separate"]
+    },
+    "scope": {
+      "type": "object",
+      "description": "The closed blast radius of this unit: the files it may touch and the project rules it must honor. A KNOWN, bounded scope is exactly what the closed_scope gate checks.",
+      "properties": {
+        "files": {
+          "type": "array",
+          "description": "The files this unit may create or modify — entry points only, the full known blast radius. Use real package-qualified paths (naming_conventions #6).",
+          "$comment": "STOP: list only the files actually in scope. REDIRECT: an open-ended or 'and whatever else' list means the blast radius is NOT closed — the closed_scope gate must refute and the audit returns promoted. bad: ['probablemente varios archivos del paquete']. good: ['plugin/skills/waves-protocol/references/feasibility_analysis_schema.json'].",
+          "items": { "type": "string" }
+        },
+        "rules": {
+          "type": "array",
+          "description": "IDs of project_rules.json rules in scope for this unit. Their full text is injected into completion_guide as Apply-rule lines (same discipline as a logbook).",
+          "items": { "type": "integer" }
+        }
+      },
+      "required": ["files"]
+    },
+    "completion_guide": {
+      "type": "array",
+      "description": "The concrete how-steps to execute this unit, each anchored to real code or a rule. Includes Apply-rule lines for every rule in scope.rules (same convention as a logbook's secondary completion_guide).",
+      "$comment": "STOP: ONE concrete how-step per item, anchored to a file/line or a rule. An 'Apply rule #N: <verbatim rule line>' item per rule in scope.rules. REDIRECT: the WHY → trigger_context; the outcome → title/expected_end_state; the proof → verification. If the steps form a multi-stage plan that needs its own decomposition, the audit returns promoted. bad: 'Refactorizar el schema, arreglar el ejemplo y revalidar todo' (multi-step plan = a logbook). good: 'Reescribir el par bad->good del $comment del campo X siguiendo product_rule #12.'",
+      "items": { "type": "string", "maxLength": 200 }
+    },
+    "verification": {
+      "type": "object",
+      "description": "The SINGLE deterministic check that proves this unit is done — exactly one, because the self_verifiable gate requires one clean observable. If a unit needs more than one verification it is too big and the audit returns promoted.",
+      "$comment": "STOP: ONE verification. REDIRECT: a second check, or a check that needs human judgment to read, means this is not a single self-verifiable unit → promoted. Reuses the logbook verification taxonomy (DRY, product_rule #10). bad: 'correr la suite completa y revisar a mano que se vea bien'. good: {type: 'schema_validation', command_or_method: 'ajv ... feasibility_analysis_schema.json', expected: 'meta-valida sin errores draft 2020-12'}.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "unit_test",
+            "integration_test",
+            "sandbox_execution",
+            "schema_validation",
+            "behavior_check",
+            "release_verification",
+            "state_change_verification",
+            "external_observation",
+            "documentation_consistency",
+            "adversarial_review"
+          ],
+          "description": "Verification type, reusing the logbook taxonomy (10 types) so a diverged_work demonstration is read the same way as a logbook one (DRY). Pick the single type that proves THIS unit done."
+        },
+        "command_or_method": {
+          "type": "string",
+          "description": "The deterministic command or method that performs the check.",
+          "$comment": "STOP: one runnable command/method. REDIRECT: the expected outcome → expected; the reason → trigger_context. bad: 'revisar el archivo'. good: 'jq empty plugin/.../feasibility_analysis_schema.json && ajv compile -s ...'."
+        },
+        "expected": {
+          "type": "string",
+          "description": "The observable outcome that means PASS.",
+          "$comment": "STOP: one observable pass condition. REDIRECT: the command → command_or_method. bad: 'que esté bien'. good: 'exit 0; el schema compila y el $comment contiene el par bad->good corregido'."
+        }
+      },
+      "required": ["type", "command_or_method", "expected"]
+    },
+    "audit": {
+      "type": "object",
+      "description": "The adversarial 3-gate audit that sets disposition. The auditor (A) tries to REFUTE that this is a single, closed, self-verifiable unit; the main agent (B) re-judges before acting (A->B pattern, design_principle #7). The conservative bias — doubt on any gate → promoted — is the anti-fragmentation rail.",
+      "$comment": "STOP: record the three gate verdicts + the resulting disposition + B's re-judgment. REDIRECT: the work itself never goes here (scope/completion_guide hold it); when disposition=promoted, this object plus the parent artifact ARE the logbook seed — do NOT also paste a draft logbook here. bad: an 'objectives' array inside audit. good: gates[3] each {name, verdict, note} + disposition + disposition_reason + reviewer_verdict.",
+      "properties": {
+        "auditor_model": {
+          "type": "string",
+          "description": "Model or agent that ran the adversarial audit (analyst A)."
+        },
+        "gates": {
+          "type": "array",
+          "description": "The three gates, each evaluated adversarially. Exactly these three; a gate is 'pass' only when the auditor could NOT refute it.",
+          "items": {
+            "type": "object",
+            "description": "One gate verdict.",
+            "$comment": "STOP: one gate, one verdict, one note. REDIRECT: the overall outcome → disposition, not repeated per gate. The auditor's stance is to REFUTE: default to 'refuted' under genuine doubt. bad: a gate with verdict 'pass' and a note admitting uncertainty. good: name 'closed_scope', verdict 'refuted', note 'scope.files says \"and related files\" — blast radius not bounded'.",
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": ["single_dimension", "closed_scope", "self_verifiable"],
+                "description": "Which gate: single_dimension (exactly one concern/mindset?), closed_scope (is the blast radius fully known and bounded?), self_verifiable (is there one deterministic check a subagent can run?)."
+              },
+              "verdict": {
+                "type": "string",
+                "enum": ["pass", "refuted"],
+                "description": "pass = the auditor could not refute the gate. refuted = the auditor found grounds to reject it (cited in note). Under genuine doubt, refuted (conservative bias)."
+              },
+              "note": {
+                "type": "string",
+                "description": "The auditor's one-line justification, citing the concrete reason for the verdict.",
+                "$comment": "STOP: one reason for THIS gate. REDIRECT: the disposition rationale → disposition_reason. bad: 'todo bien'. good: 'single_dimension refuted: el título lleva un \" y \" que une dos concerns ortogonales'."
+              }
+            },
+            "required": ["name", "verdict"]
+          }
+        },
+        "disposition": {
+          "type": "string",
+          "enum": ["executable", "promoted"],
+          "description": "executable = all three gates passed → the object IS the subagent prompt, run it now and execute its verification. promoted = any gate refuted (or doubt) → too big to be a diverged_work; the object IS the formal seed for /waves:logbook-create. Doubt always resolves to promoted (anti-fragmentation rail)."
+        },
+        "disposition_reason": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Why this disposition, citing the deciding gate(s). For promoted, name the gate that failed so logbook-create inherits a precise starting point.",
+          "$comment": "STOP: one rationale citing the gate(s). REDIRECT: the per-gate detail stays in gates[].note. bad: 'lo subo a bitácora porque me parece grande'. good: 'promoted: closed_scope refuted — blast radius incierto; el seed para logbook-create arranca acotando scope.files.'"
+        },
+        "reviewer_verdict": {
+          "type": "string",
+          "enum": ["concur", "revise"],
+          "description": "The main agent (B) re-judging the auditor's disposition before acting (A->B, design_principle #7): concur = act on the assigned disposition; revise = B disagrees and re-runs/overrides (recorded in disposition_reason). B classifies the disposition, it does not silently accept it."
+        }
+      },
+      "required": ["gates", "disposition"]
+    }
+  },
+  "required": ["created_at", "title", "trigger_context", "scope", "completion_guide", "verification", "audit"]
+}

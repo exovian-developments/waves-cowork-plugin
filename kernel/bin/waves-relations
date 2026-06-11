@@ -1,0 +1,44 @@
+#!/bin/bash
+# waves-relations — kernel rail: blast-radius queries over the manifest's
+# relations[] graph (w6 Phase 13).
+#
+# The relations[] field (project_manifest.json) is the semantic blast-radius
+# graph: directed edges {from, to, kind, why} that say "a change to X can
+# affect Y" — couplings grep cannot see. This rail gives the graph a
+# deterministic query surface (consumers: PCC ecosystem view, commands).
+#
+# Usage:
+#   waves-relations <manifest.json>                 # emit all edges (JSON array)
+#   waves-relations <manifest.json> --for <name>    # blast radius of a component:
+#                                                   # edges whose from or to
+#                                                   # contains <name>
+#
+# Output: JSON array on stdout. A manifest without relations[] emits [] —
+# an empty graph is valid, never an error.
+# Exit codes: 0 = ok, 1 = usage/internal error.
+
+set -euo pipefail
+
+MANIFEST="" FOR_COMPONENT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --for) FOR_COMPONENT="${2:-}"; shift 2 ;;
+    --help)
+      grep '^# ' "$0" | head -18 | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    -*) echo "waves-relations: unknown argument $1" >&2; exit 1 ;;
+    *) MANIFEST="$1"; shift ;;
+  esac
+done
+
+[ -n "$MANIFEST" ] || { echo "waves-relations: manifest path required (see --help)" >&2; exit 1; }
+[ -f "$MANIFEST" ] || { echo "waves-relations: manifest not found: $MANIFEST" >&2; exit 1; }
+command -v jq &>/dev/null || { echo "waves-relations: jq is required" >&2; exit 1; }
+
+if [ -n "$FOR_COMPONENT" ]; then
+  jq --arg c "$FOR_COMPONENT" \
+    '[.relations // [] | .[] | select((.from | contains($c)) or (.to | contains($c)))]' \
+    "$MANIFEST"
+else
+  jq '.relations // []' "$MANIFEST"
+fi

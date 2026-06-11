@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Waves Corpus Insights Schema",
+  "description": "Structured output of the corpus miner (/waves:corpus-mine, w6 Phase 5 — second-order metacognition, design_principle #11). One report per mining run: the aggregated, A->B-verified insights extracted from reading every logbook's analyses across waves/projects (recurring findings, most-violated rules, most-omitted edge_cases, emergent fields), each carrying a verifier-B classification and a SUGGEST-ONLY routing recommendation. The miner never auto-edits a governed artifact; this file is its read-only proposal record (human-in-the-loop).",
+  "$comment": "CANONICAL SHAPE: a single object with keys generated_at, corpus_scope, model, corpus_summary, findings, broken_artifacts. OPEN (never additionalProperties:false, design_principle #11) — a recurring extra key is a signal for the NEXT mining run, not an error. STOP: one mining run per file (overwrite on re-mine; copy first if history is needed). REDIRECT: this file holds INSIGHTS + SUGGESTIONS only — the actual rule/schema/reviewer edits a human chooses to apply go into project_rules.json / the schema / the command, NOT here; raw per-logbook findings stay in their own integrity-audit/correctness-* files, this file aggregates them by reference. An undeclared sibling field is the signal you are writing the wrong artifact. bad: an 'applied_changes' array here (the miner never edits — that belongs in a logbook of a separate rules-update task). good: findings[] each = one insight + occurrences + sources + verifier-B classification + suggested_routing.",
+  "type": "object",
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp of the mining run."
+    },
+    "corpus_scope": {
+      "type": "string",
+      "description": "What corpus was mined: the root scope, or a project name in --project mode (use the real package name, e.g. conversational_engine_ba — naming_conventions).",
+      "$comment": "STOP: one scope per run — the root corpus OR one project, not a freeform note. REDIRECT: per-artifact paths belong in each finding's `sources`, not here; this is just the scope label. bad: 'mined everything including the broken ones in w1'. good: 'root' or 'conversational_engine_ba'."
+    },
+    "model": {
+      "type": "string",
+      "description": "Model or agent that produced the mining run."
+    },
+    "corpus_summary": {
+      "type": "object",
+      "description": "Compact counts of what the walker saw, for quick reading; the detail is in findings.",
+      "properties": {
+        "logbooks_total": { "type": "integer", "minimum": 0, "description": "Logbooks discovered (both layouts)." },
+        "logbooks_with_analyses": { "type": "integer", "minimum": 0, "description": "Logbooks that carry at least one analysis — the DENOMINATOR for reading finding frequency (waves predating the analysis files contribute logbooks but zero findings)." },
+        "integrity_audits": { "type": "integer", "minimum": 0, "description": "integrity-audit analyses read." },
+        "correctness_postplan": { "type": "integer", "minimum": 0, "description": "correctness-postplan analyses read." },
+        "correctness_postimpl": { "type": "integer", "minimum": 0, "description": "correctness-postimpl analyses read." },
+        "other_analyses": { "type": "integer", "minimum": 0, "description": "Analyses whose filename matched no known class (e.g. metacognition-*, primary-*) — recorded as an emergent-artifact signal, not dropped." },
+        "broken_artifacts": { "type": "integer", "minimum": 0, "description": "Pre-existing artifacts that failed to parse (surfaced, never edited)." }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "One entry per insight. An empty array means the corpus surfaced no recurring signal worth reporting.",
+      "items": { "$ref": "#/$defs/insight" }
+    },
+    "broken_artifacts": {
+      "type": "array",
+      "description": "Pre-existing artifacts that failed to parse during the walk — reported for a human to fix, NEVER edited by the miner (product_decision #23).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Path of the unparseable artifact." },
+          "reason": { "type": "string", "description": "Why it failed (e.g. invalid JSON)." }
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  "required": ["generated_at", "corpus_scope", "findings"],
+  "$defs": {
+    "insight": {
+      "type": "object",
+      "description": "A single mined insight: an A-proposed pattern carrying its independent verifier-B classification and a suggest-only routing recommendation.",
+      "$comment": "STOP: one pattern per insight — one rule, one edge_case class, one emergent field. REDIRECT: the per-logbook finding that contributed stays in its own integrity-audit/correctness-* file (cite it in `sources`), do NOT re-paste it; the edit a human might apply does NOT go here (suggested_routing only DESCRIBES it). The verifier B classifies, never vetoes (design_principle #7). bad: one insight bundling 'rule #9 is violated AND ui_requirements keeps appearing' (two patterns) with no sources. good: kind 'most_violated_rule', subject '9', occurrences 12, sources [...3 paths...], classification 'confirmed', suggested_routing {target: 'rules-update', suggestion: '...'}.",
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["recurring_finding", "most_violated_rule", "omitted_edge_case", "emergent_field", "field_fill_quality"],
+          "description": "Which extraction produced this: recurring_finding (same correctness/integrity issue across logbooks), most_violated_rule (rule_id flagged most), omitted_edge_case (edge_case class most often left with empty expected), emergent_field (an invented field recurring across same-type artifacts = officialization candidate), field_fill_quality (a declared prose field chronically over-filled or multi-concern across the corpus — subject is the artifact.field path; routes to a $comment rewrite, the manual run's highest-leverage extraction)."
+        },
+        "subject": {
+          "type": "string",
+          "description": "The thing the insight is about: a rule_id, a finding category, an edge_case class, or an emergent field name (e.g. 'ui_requirements').",
+          "$comment": "STOP: one subject. REDIRECT: the narrative goes in `observation`, not here — `subject` is the key the insight is indexed by. bad: 'rule 9 and the ui_requirements field'. good: '9' or 'ui_requirements'."
+        },
+        "occurrences": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many corpus snapshots exhibit this pattern. Recurrence is how signal is discriminated from noise (design_principle #11) — not by closing the schema."
+        },
+        "sources": {
+          "type": "array",
+          "description": "Snapshot paths that exhibit the pattern, for traceability back to the corpus. Use real package-qualified paths (naming_conventions #6).",
+          "items": { "type": "string" }
+        },
+        "observation": {
+          "type": "string",
+          "description": "What the miner (analyst A) observed about this pattern.",
+          "$comment": "STOP: describe the pattern only. REDIRECT: the recommended action belongs in `suggested_routing.suggestion`, NOT here; the verifier's verdict belongs in `classification`. bad: 'rule 9 violated 12x, we should rewrite its $comment and apply it now'. good: 'rule 9 (verifier pairing) flagged in 12 logbooks across w3-w8, concentrated in adversarial-subagent objectives'."
+        },
+        "classification": {
+          "type": "string",
+          "enum": ["confirmed", "smoke", "unverifiable", "gold"],
+          "description": "Verifier-B classification (A->B pattern, design_principle #7): confirmed (real, grounded), smoke (likely noise/over-eager), unverifiable (cannot decide from the corpus), gold (high-value, possibly missed). B classifies, never vetoes — A's raw observation is preserved either way."
+        },
+        "suggested_routing": {
+          "type": "object",
+          "description": "Where this insight COULD feed back — a suggestion for a human to act on, never an applied change (human-in-the-loop).",
+          "$comment": "STOP: one target + one suggestion. REDIRECT: this DESCRIBES a possible edit; the miner NEVER performs it — applying it is a separate human-initiated rules-update/schema task. bad: 'edited project_rules.json rule 9'. good: target 'rules-update', suggestion 'strengthen rule #9 $comment with a STOP on self-audit'.",
+          "properties": {
+            "target": {
+              "type": "string",
+              "enum": ["rules-update", "schema", "reviewer-prompt", "none"],
+              "description": "Which knob a human could turn: a project rule, a schema field/$comment, an adversarial reviewer prompt, or none (informational only)."
+            },
+            "suggestion": {
+              "type": "string",
+              "description": "The concrete, suggest-only recommendation. The miner does not apply it.",
+              "$comment": "STOP: one concrete recommendation. REDIRECT: this DESCRIBES an edit a human could make — the miner NEVER performs it (applying it is a separate human-initiated rules-update/schema task); whether it is worth doing is `classification`, not phrased here. bad: 'done — rewrote rule #9 $comment'. good: 'strengthen rule #9 $comment with a STOP forbidding self-audit'."
+            }
+          }
+        }
+      },
+      "required": ["id", "kind", "subject", "classification"]
+    }
+  }
+}

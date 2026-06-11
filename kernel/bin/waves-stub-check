@@ -1,0 +1,236 @@
+#!/bin/bash
+# waves-stub-check — kernel rail: deterministic stub detection (extracted from
+# the plugin's waves-stub-check.sh PostToolUse hook, w6 Phase 13; checkers
+# preserved verbatim). Lands design_principle #8 (Demonstration over
+# declaration): deterministic gates run before adversarial subagents.
+#
+# Self-contained: file and project type are explicit arguments; no stdin JSON,
+# no project_rules.json lookup, no telemetry (the calling wrapper owns those).
+#
+# Usage:
+#   waves-stub-check --file <path> --type <agentic|backend|frontend|fullstack|general>
+#
+# Dispatcher by type:
+#   agentic                    → check_agentic (md/sh/json stub detection)
+#   backend|frontend|fullstack → check_software (.dart/.ts/.py/.js/.go stubs)
+#   anything else              → check_general (substance heuristics)
+#
+# Exit codes (hook contract preserved):
+#   0 = clean (no stub detected, or file ignored by extension)
+#   2 = stub detected (findings on stderr)
+#   1 = internal error
+
+set -euo pipefail
+
+TOOL_FILE="" PROJECT_TYPE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --file) TOOL_FILE="${2:-}"; shift 2 ;;
+    --type) PROJECT_TYPE="${2:-}"; shift 2 ;;
+    --help)
+      grep '^# ' "$0" | head -20 | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) echo "waves-stub-check: unknown argument $1" >&2; exit 1 ;;
+  esac
+done
+
+# Fail-safe: sin file, sin trabajo
+if [ -z "$TOOL_FILE" ] || [ ! -f "$TOOL_FILE" ]; then
+  exit 0
+fi
+
+# Check jq disponible (fail-safe; el checker agentic lo usa para schemas)
+if ! command -v jq &> /dev/null; then
+  exit 0
+fi
+
+# --- Sub-checkers (lógica verbatim del hook original) ---
+check_software() {
+  # Per-language stub detection — solo procesa .dart/.ts/.tsx/.js/.jsx/.py/.go
+  case "$TOOL_FILE" in
+    *.dart|*.ts|*.tsx|*.js|*.jsx|*.py|*.go) ;;
+    *) exit 0 ;;
+  esac
+
+  local violations=0
+  local stderr_buffer=""
+
+  _flag() {
+    violations=$((violations + 1))
+    stderr_buffer+="$1"$'\n'
+  }
+
+  # Universal placeholders (any language)
+  while IFS= read -r match; do
+    [ -n "$match" ] && _flag "stub-check[software]: $TOOL_FILE:$match — placeholder marker (TODO/FIXME/XXX)"
+  done < <(grep -nE '(TODO|FIXME|XXX)[: ]' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+
+  # Dart-specific
+  if [[ "$TOOL_FILE" == *.dart ]]; then
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag "stub-check[software]: $TOOL_FILE:$match — UnimplementedError / unimplemented body"
+    done < <(grep -nE '(UnimplementedError|throw\s+Unimplemented)' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag "stub-check[software]: $TOOL_FILE:$match — empty method body {}"
+    done < <(grep -nE '^\s*[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*\{\s*\}\s*$' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+  fi
+
+  # TypeScript / JavaScript
+  if [[ "$TOOL_FILE" == *.ts || "$TOOL_FILE" == *.tsx || "$TOOL_FILE" == *.js || "$TOOL_FILE" == *.jsx ]]; then
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag "stub-check[software]: $TOOL_FILE:$match — 'not implemented' error"
+    done < <(grep -niE 'throw new Error\(.*not implemented' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag "stub-check[software]: $TOOL_FILE:$match — empty function body"
+    done < <(grep -nE 'function\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*\{\s*\}' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+  fi
+
+  # Python
+  if [[ "$TOOL_FILE" == *.py ]]; then
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag "stub-check[software]: $TOOL_FILE:$match — pass-only function body"
+    done < <(grep -nE 'def\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*:\s*$' "$TOOL_FILE" 2>/dev/null | while read -r line; do
+      lineno=$(echo "$line" | cut -d: -f1)
+      next=$((lineno + 1))
+      next_content=$(sed -n "${next}p" "$TOOL_FILE" 2>/dev/null | sed 's/^[[:space:]]*//')
+      [ "$next_content" = "pass" ] && echo "$next"
+    done)
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag "stub-check[software]: $TOOL_FILE:$match — NotImplementedError"
+    done < <(grep -nE 'raise\s+NotImplementedError' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+  fi
+
+  # Go
+  if [[ "$TOOL_FILE" == *.go ]]; then
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag "stub-check[software]: $TOOL_FILE:$match — panic('not implemented')"
+    done < <(grep -niE 'panic\(.*not implemented' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+  fi
+
+  if [ "$violations" -gt 0 ]; then
+    printf '%s' "$stderr_buffer" >&2
+    exit 2
+  fi
+  exit 0
+}
+
+check_agentic() {
+  # Artifact-shape stub detection para .md, .sh, .json
+  case "$TOOL_FILE" in
+    *.md|*.sh|*.json) ;;
+    *) exit 0 ;;
+  esac
+
+  local violations=0
+  local stderr_buffer=""
+
+  _flag_a() {
+    violations=$((violations + 1))
+    stderr_buffer+="$1"$'\n'
+  }
+
+  # .md commands: placeholders [TBD], <placeholder>, lorem-ipsum
+  if [[ "$TOOL_FILE" == *.md ]]; then
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag_a "stub-check[agentic]: $TOOL_FILE:$match — placeholder marker ([TBD]/<placeholder>/lorem ipsum)"
+    done < <(grep -niE '(\[TBD\]|<placeholder>|lorem ipsum)' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+    # Numbered list step seguido inmediatamente por blank line o EOF (step vacío)
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag_a "stub-check[agentic]: $TOOL_FILE:$match — numbered step with no content"
+    done < <(awk '/^[[:space:]]*[0-9]+\.[[:space:]]*$/ {print NR}' "$TOOL_FILE" 2>/dev/null)
+    # Step que es solo "..." o "TBD"
+    while IFS= read -r match; do
+      [ -n "$match" ] && _flag_a "stub-check[agentic]: $TOOL_FILE:$match — step content placeholder (... or TBD)"
+    done < <(grep -nE '^[[:space:]]*[0-9]+\.[[:space:]]+(\.\.\.|TBD)[[:space:]]*$' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+  fi
+
+  # .sh hooks: archivos cuyo contenido (sin shebang, comentarios, whitespace) es solo "exit 0"
+  if [[ "$TOOL_FILE" == *.sh ]]; then
+    local meaningful=""
+    meaningful=$(grep -vE '^[[:space:]]*(#|$)' "$TOOL_FILE" 2>/dev/null | tr -d '[:space:]' || echo "")
+    if [ -z "$meaningful" ] || [ "$meaningful" = "exit0" ]; then
+      _flag_a "stub-check[agentic]: $TOOL_FILE:0 — sh hook is comment-only or solo 'exit 0'"
+    fi
+  fi
+
+  # .json schemas: si declara metadata de schema (title|type|$schema) pero properties absent/empty
+  if [[ "$TOOL_FILE" == *.json ]]; then
+    local is_schema="false"
+    local has_props="false"
+    is_schema=$(jq -r 'if (.title or .type or has("$schema")) then "true" else "false" end' "$TOOL_FILE" 2>/dev/null || echo "false")
+    has_props=$(jq -r '(.properties | type == "object" and (length > 0))' "$TOOL_FILE" 2>/dev/null || echo "true")
+    if [ "$is_schema" = "true" ] && [ "$has_props" = "false" ]; then
+      _flag_a "stub-check[agentic]: $TOOL_FILE:0 — json schema declares metadata (title/type/\$schema) but properties is absent or empty"
+    fi
+  fi
+
+  if [ "$violations" -gt 0 ]; then
+    printf '%s' "$stderr_buffer" >&2
+    exit 2
+  fi
+  exit 0
+}
+
+check_general() {
+  # Substance heuristics para artefactos de texto (word-count floor, empty
+  # headers, placeholders). Baseline calibrable vía env.
+  case "$TOOL_FILE" in
+    *.md|*.txt|*.rst) ;;
+    *) exit 0 ;;
+  esac
+
+  local violations=0
+  local stderr_buffer=""
+
+  _flag_g() {
+    violations=$((violations + 1))
+    stderr_buffer+="$1"$'\n'
+  }
+
+  # Heurística 1: word-count floor (default 10)
+  local wc_floor="${WAVES_GENERAL_WC_FLOOR:-10}"
+  local wc_actual=$(wc -w "$TOOL_FILE" 2>/dev/null | awk '{print $1}')
+  if [ -n "$wc_actual" ] && [ "$wc_actual" -lt "$wc_floor" ]; then
+    _flag_g "stub-check[general]: $TOOL_FILE:0 — word count $wc_actual < floor $wc_floor"
+  fi
+
+  # Heurística 2: empty headers (header line seguido inmediatamente por otra header o EOF, sin body)
+  while IFS= read -r match; do
+    [ -n "$match" ] && _flag_g "stub-check[general]: $TOOL_FILE:$match — header without body"
+  done < <(awk '
+    /^#+[[:space:]]+/ {
+      if (prev_header && !body_seen) print prev_line
+      prev_header = 1
+      prev_line = NR
+      body_seen = 0
+      next
+    }
+    /^[[:space:]]*$/ { next }
+    { if (prev_header) body_seen = 1 }
+    END { if (prev_header && !body_seen) print prev_line }
+  ' "$TOOL_FILE" 2>/dev/null)
+
+  # Heurística 3: lorem-ipsum / placeholder / tbd / generic <...>
+  while IFS= read -r match; do
+    [ -n "$match" ] && _flag_g "stub-check[general]: $TOOL_FILE:$match — placeholder marker (lorem ipsum/placeholder/TBD/<...>)"
+  done < <(grep -niE '(lorem ipsum|\bplaceholder\b|\bTBD\b|<[^>]+>)' "$TOOL_FILE" 2>/dev/null | cut -d: -f1)
+
+  if [ "$violations" -gt 0 ]; then
+    printf '%s' "$stderr_buffer" >&2
+    exit 2
+  fi
+  exit 0
+}
+
+# --- Dispatcher ---
+case "$PROJECT_TYPE" in
+  agentic)
+    check_agentic
+    ;;
+  backend|frontend|fullstack)
+    check_software
+    ;;
+  *)
+    check_general
+    ;;
+esac

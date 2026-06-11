@@ -4,7 +4,29 @@ description: Create a complete product blueprint from the product foundation. Wo
 
 # Command: /waves:blueprint-create
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
 You are executing the waves blueprint creation command. Follow these instructions exactly.
+
+## Multi-project scope
+
+Apply the **Multi-project Path Resolution** helper from `plugin/skills/waves-protocol/SKILL.md` before any other step:
+
+- Parse `--project <name>` from the command arguments.
+- If present: set `base_path = projects/<name>/waves_files/` and validate that projects/<name>/ exists (abort with a "scope not found" error if it does not).
+- If absent: set `base_path = waves_files/` (backwards-compatible default — identical to pre-3.x single-project behavior).
+
+Use `base_path` for every `waves_files/...` reference in the steps below. When the steps say `waves_files/<artifact>` they mean `<base_path><artifact>` in multi-project mode.
+
+When `--project` is present, also write the **session marker** via bash BEFORE any artifact operation — this is what makes the active scope visible to hooks (`plugin/hooks/_lib/scope-resolve.sh`) when they fire on subsequent Edit/Write:
+
+```bash
+mkdir -p "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}"
+printf '%s=%s\n' "$(printf '%s' "$PWD" | { md5 -q 2>/dev/null || md5sum | awk '{print $1}'; })" "<scope_name>" \
+  > "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}/active-scope"
+```
+
+Idempotent (overwrite-safe). The marker maps `<cwd_md5>=<scope_name>` so a session that traverses multiple cwds keeps one line per cwd. When `--project` is absent, **do not write** the marker — hooks fall back to root naturally.
 
 ## Your Role
 
@@ -16,7 +38,9 @@ You are the product architect. You consume the product foundation (validated fac
 
 ## Step -1: Prerequisites Check (CRITICAL)
 
-Check if `ai_files/user_pref.json` exists.
+**Multi-project note (root-only validation):** prerequisite artifacts (`user_pref.json`, `project_manifest.json`, `project_rules.json`, plus any required blueprint/roadmap) are validated at root (`waves_files/<artifact>`) regardless of whether the `--project <name>` flag is set. Scopes inherit root prerequisites. If a root prerequisite is missing in multi-project mode, abort with a message pointing to root setup (e.g., "Run /waves:project-init at root first — multi-project scopes inherit root prerequisites.") — NEVER to a per-scope path. The `base_path` from the Multi-project scope helper applies to WORK artifacts (logbooks, scoped rules/manifest/blueprint), not to prerequisite existence checks.
+
+Check if `waves_files/user_pref.json` exists.
 - If found: Extract `preferred_language` for all interactions AND `project_context.project_type` for terminology adaptation (see Step -0.5).
 - If not found: EXIT with message: "user_pref.json not found. Please run /waves:project-init first."
 
@@ -52,9 +76,9 @@ This step adds NO new fields to the blueprint schema. The output of `blueprint-c
 
 ## Step 0: Load Foundation & Validate Readiness
 
-1. Check if `ai_files/foundation.json` exists
+1. Check if `waves_files/foundation.json` exists
 2. IF NOT EXISTS:
-   - Check for `ai_files/feasibility.json`
+   - Check for `waves_files/feasibility.json`
    - If feasibility exists → EXIT: "Foundation not found. Run /waves:foundation-create first."
    - If nothing exists → EXIT: "No foundation or feasibility found. Run /waves:feasibility-analyze first."
 3. IF EXISTS: Read completely into memory
@@ -62,9 +86,9 @@ This step adds NO new fields to the blueprint schema. The output of `blueprint-c
    - If `false`: Show blocking issues. Ask: "Proceed anyway? (Yes / No)"
    - If "No" → EXIT
 5. Extract product name from `foundation.meta.product_name` (or use parameter)
-6. Check if `ai_files/blueprint.json` already exists → warn if so
-7. Optionally load `ai_files/feasibility.json` for deeper context if available
-8. Load `ai_files/project_manifest.json` if exists (for tech stack context)
+6. Check if `waves_files/blueprint.json` already exists → warn if so
+7. Optionally load `waves_files/feasibility.json` for deeper context if available
+8. Load `waves_files/project_manifest.json` if exists (for tech stack context)
 
 ## Step 1: Set Blueprint Type & Owner
 
@@ -274,7 +298,7 @@ Store as `blueprint.success_metrics[]`.
 ## Step 14: Tech Stack
 
 Check sources:
-- `ai_files/project_manifest.json` → extract framework, language, infrastructure
+- `waves_files/project_manifest.json` → extract framework, language, infrastructure
 - Owner knowledge
 
 Ask owner:
@@ -310,7 +334,7 @@ Store as `blueprint.product_decisions[]` and `blueprint.open_questions[]`.
 
 ## Step 16: Generate & Save Blueprint JSON
 
-1. Read schema from `ai_files/schemas/product_blueprint_schema.json`
+1. Read schema from `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/product_blueprint_schema.json`
 2. Build complete JSON with ALL sections from Steps 1-15
 3. Set `meta`:
    - `product_name`: from foundation
@@ -320,14 +344,14 @@ Store as `blueprint.product_decisions[]` and `blueprint.open_questions[]`.
    - `last_updated`: current UTC ISO 8601
    - `blueprint_type`: from Step 1
 4. Validate against schema
-5. Write to `ai_files/blueprint.json`
+5. Write to `waves_files/blueprint.json`
 
 ## Step 17: Summary
 
 ```
 ✅ Product Blueprint created!
 
-📁 File: ai_files/blueprint.json
+📁 File: waves_files/blueprint.json
 
 📊 Summary:
 • Product: [name] ([type])

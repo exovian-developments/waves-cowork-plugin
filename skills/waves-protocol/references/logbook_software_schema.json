@@ -3,6 +3,7 @@
   "title": "LLM Logbook Schema",
   "description": "Schema for tracking development context across sessions. Supports long-term memory, objective tracking with actionable guidance, and progress documentation. Designed for continuity across multiple LLMs and sessions.",
   "type": "object",
+  "$comment": "CANONICAL SHAPE (read this if you forked or adopted Waves mid-flight — the contract lives here, not only in $defs). objectives is an object with exactly two arrays: objectives.main and objectives.secondary. objectives.main is an ARRAY of OBJECTS, each with an integer `id` (start at 1, increment) plus content/context/scope/status — NOT a single object, NOT a string. There is NO 'meta', NO 'context' at the root, NO 'completed_at', NO 'ui_requirements', NO 'philosophy' field. completion_guide exists ONLY on secondary objectives, never on main. An undeclared sibling field is the signal you are writing in the wrong artifact: durable strategy → roadmap; the product WHY → blueprint; rolling memory → recent_context/history_summary here. If a value won't fit a declared field, the field is wrong, not the cap.",
   "properties": {
     "ticket": {
       "type": "object",
@@ -19,10 +20,31 @@
           "description": "Direct URL to the ticket or task in an external system (Jira, GitHub, etc.).",
           "$comment": "Optional. Leave empty string if no external system. Do not invent URLs."
         },
+        "external_ref": {
+          "type": "object",
+          "description": "Structured reference to the ticket in an external tracker, when a plain url is insufficient (e.g. an Azure DevOps work-item id, a Linear issue).",
+          "$comment": "Optional. Officializes the ado_wi_id / external-id field adopters invented. STOP: one external system per logbook; if the work spans two trackers, that is two logbooks. REDIRECT: the human link goes in `url`; the ticket prose in `description`; do NOT add system-specific custom keys here. `system` is a free string (no closed enum — validating a specific tracker is the command's job, not the schema's). bad: {'azure_id': 867, 'jira': 'X'} (two systems + custom keys). good: {'system': 'azure-devops', 'id': '867', 'url': 'https://...'}.",
+          "properties": {
+            "system": { "type": "string", "description": "Name of the external tracker (free string), e.g. 'azure-devops', 'github', 'jira', 'linear'." },
+            "id": { "type": "string", "description": "Identifier of the work item within that system." },
+            "url": { "type": "string", "description": "Direct link to the work item (may duplicate ticket.url)." }
+          },
+          "required": ["system", "id"]
+        },
+        "ui_requirements": {
+          "type": "object",
+          "description": "UI scope of the ticket, when it involves frontend work. Optional. Officializes the field logbook-create Step 2.1 already emits (corpus: present in 22/22 logbooks, previously undeclared).",
+          "$comment": "Optional. STOP: describe UI SCOPE only — whether there is UI, the references, brief notes. REDIRECT: implementation steps go in the secondaries' completion_guide; visual design decisions -> a product_decision or the design doc; do NOT paste full specs here. bad: a paragraph of layout CSS. good: {has_ui: true, visual_references: ['designs/detail.png'], notes: '3-column grid on desktop'}.",
+          "properties": {
+            "has_ui": { "type": "boolean", "description": "True if the ticket involves UI work." },
+            "visual_references": { "type": "array", "items": { "type": "string" }, "description": "Paths or URLs to mocks, wireframes, screenshots." },
+            "notes": { "type": "string", "description": "Brief UI analysis or layout notes." }
+          }
+        },
         "description": {
           "type": "string",
           "description": "Detailed explanation and context provided in the ticket. Includes acceptance criteria if available.",
-          "$comment": "Copy from ticket or ask user to explain. Include all relevant details: requirements, constraints, acceptance criteria."
+          "$comment": "DISTILL, don't dump. Goal + acceptance in 2-4 sentences: what 'done' looks like from the user's view, the anchor (NOT the design). REDIRECT: the implementation spec (that is objectives + completion_guide), file/class inventories (scope.files), and references to past decisions/why-this-approach (governance_context.relevant_decisions). The full design belongs DOWNWARD in objectives — this field just frames the target. Test: if it reads like a how-to or grows by hundreds of chars per wave, you pasted the spec; cut to the goal + acceptance. bad: 'Refactor auth: create UserDto, migrate table 011, add UserRepository.findByEmail returning Result<User>, wire AuthDataSource, then add JWT middleware reading the header, plus tests for...' (1900 chars). good: 'Add email/password sign-up so a new user can authenticate. Done when a valid sign-up creates a user and returns a session token, and a duplicate email is rejected with a clear error.'"
         }
       },
       "required": ["title", "description"]
@@ -166,22 +188,156 @@
       }
     },
 
+    "governance_context": {
+      "type": "object",
+      "description": "Compact extracted subset of the blueprint chain (scope → product → company) that impacts this logbook's business direction. Populated by logbook-create A1.4 via deterministic jq queries against each blueprint in the parent_blueprint chain. Loaded into objectives-implement Step 5 'Governance banner' so implementers carry blueprint-level alignment without re-reading full blueprints.",
+      "$comment": "Replaces the previous vague 'extract relevant sections' directive. Each item carries a `level` field (scope|product|company) indicating which blueprint in the chain it came from. The banner printed at implementation time uses this field verbatim — same pattern as project_rules.json injection into completion_guide. Forward-only: pre-existing logbooks without this field continue to validate; new logbooks populate it. Empty arrays are valid when no blueprint matches the ticket (rare but possible for greenfield tickets).",
+      "properties": {
+        "blueprint_chain": {
+          "type": "array",
+          "description": "Ordered list of blueprints walked by logbook-create starting from the scope/product blueprint and following parent_blueprint refs upward. company_blueprint.json appended last when present.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "string", "enum": ["scope", "product", "company"] },
+              "path": { "type": "string", "description": "Path relative to repo root, e.g. 'projects/frontend/waves_files/blueprint.json'." },
+              "blueprint_type": { "type": "string", "enum": ["standard", "autonomous_entity", "company"] }
+            },
+            "required": ["level", "path"]
+          }
+        },
+        "matched_capabilities": {
+          "type": "array",
+          "description": "Capabilities (essential + non_essential.important + non_essential.desired) whose `capability` text matches ticket keywords or whose ID is referenced by matched flows. Includes is_essential flag + acceptance_criteria when present.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "string", "enum": ["scope", "product", "company"] },
+              "id": { "type": "integer" },
+              "capability": { "type": "string", "maxLength": 300 },
+              "is_essential": { "type": "boolean" },
+              "acceptance_criteria": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["level", "id", "capability"]
+          }
+        },
+        "related_flows": {
+          "type": "array",
+          "description": "user_flows + system_flows touching matched_capabilities (via capability_refs intersection). Abbreviated form: name + entry_point + termination + description (no exhaustive step lists).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "string", "enum": ["scope", "product", "company"] },
+              "type": { "type": "string", "enum": ["user_flow", "system_flow", "view"] },
+              "id": { "type": "integer" },
+              "name": { "type": "string", "maxLength": 100 },
+              "entry_point": { "type": "string", "maxLength": 200 },
+              "termination": { "type": "string", "maxLength": 200 }
+            },
+            "required": ["level", "type", "id", "name"]
+          }
+        },
+        "governing_design_principles": {
+          "type": "array",
+          "description": "design_principles that generated rules referenced in logbook's primaries' scope.rules. Surfaces the WHY behind coding rules — implementer reads principle + rule together.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "string", "enum": ["scope", "product", "company"] },
+              "id": { "type": "integer" },
+              "principle": { "type": "string", "maxLength": 300 }
+            },
+            "required": ["level", "id", "principle"]
+          }
+        },
+        "applicable_product_rules": {
+          "type": "array",
+          "description": "product_rules whose applies_to references matched_capabilities or matched flows. Distinct from coding rules (project_rules.json) — these are business behavioral rules.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "string", "enum": ["scope", "product", "company"] },
+              "id": { "type": "integer" },
+              "rule": { "type": "string", "maxLength": 300 },
+              "applies_to": { "type": "string", "maxLength": 200 }
+            },
+            "required": ["level", "id", "rule"]
+          }
+        },
+        "out_of_scope_reminders": {
+          "type": "array",
+          "description": "out_of_scope items whose statement text overlaps with ticket keywords. Surfaced as STOP signals — if implementer is about to do this, abort.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "string", "enum": ["scope", "product", "company"] },
+              "id": { "type": "integer" },
+              "statement": { "type": "string", "maxLength": 300 }
+            },
+            "required": ["level", "id", "statement"]
+          }
+        },
+        "relevant_decisions": {
+          "type": "array",
+          "description": "product_decisions whose impact_on references matched capabilities/flows, OR whose decision text directly forbids/requires something in the ticket territory. Surfaces historical 'do/don't' to prevent re-litigation.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "string", "enum": ["scope", "product", "company"] },
+              "id": { "type": "integer" },
+              "decision": { "type": "string", "maxLength": 300 },
+              "impact_on": { "type": ["string", "null"], "maxLength": 200 }
+            },
+            "required": ["level", "id", "decision"]
+          }
+        },
+        "success_metrics": {
+          "type": "array",
+          "description": "success_metrics tied to matched_capabilities (when blueprint declares the linkage). Informs instrumentation + observability choices.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": { "type": "string", "enum": ["scope", "product", "company"] },
+              "id": { "type": "integer" },
+              "metric": { "type": "string", "maxLength": 200 },
+              "success_signal": { "type": "string", "maxLength": 300 }
+            },
+            "required": ["level", "id", "metric"]
+          }
+        },
+        "autonomous_entity_identity": {
+          "type": ["object", "null"],
+          "description": "Populated only when any blueprint in the chain has blueprint_type='autonomous_entity'. Carries identity + voice + operation_modes + operational_limits — load-bearing for agentic ticket implementations.",
+          "properties": {
+            "level": { "type": "string", "enum": ["scope", "product", "company"] },
+            "identity": { "type": "string" },
+            "voice": { "type": "string" },
+            "operation_modes": { "type": "string" },
+            "operational_limits": { "type": "string" }
+          }
+        }
+      }
+    },
+
     "audit": {
       "type": "object",
-      "description": "Integrity audit state for this logbook. Created with is_already_audited=false at logbook persistence (Step A5 of waves:logbook-create) and updated after the integrity reviewer subagent runs in Step A6.",
-      "$comment": "Required field. New logbooks initialize is_already_audited=false at Save File and the field flips to true after the integrity reviewer completes. logbook-update flips it back to false when material changes occur (new objectives, scope.rules modified, completion_guide changed) and re-runs the audit.",
+      "description": "Audit state for this logbook. Models the three gates as first-class objects: integrity (logbook-create Step A6), correctness_postplan (Step A7), correctness_postimpl (objectives-implement Step 9.8). Legacy fields is_already_audited/audit_file are the v2 shape, preserved for backwards-compat.",
+      "$comment": "CANONICAL SHAPE (v3): three optional sub-objects — integrity, correctness_postplan, correctness_postimpl — each a gate_result {ran, report_file, summary, completed_at}. STOP: one gate per sub-object; do not merge a post-plan finding into integrity. REDIRECT: the findings prose lives in the report_file on disk (corpus-mineable, design_principle #11), NOT inline here; a numeric tally goes in summary; the logbook's running narrative goes in recent_context. Legacy {is_already_audited, audit_file} stay valid (v2) until migrate_v2_to_v3 (w6 Phase 4) maps them to integrity.{ran, report_file}. bad: stuffing the A7 finding list into a $-field on the logbook. good: correctness_postplan = {ran:true, report_file:'.../audits/correctness-postplan-<basename>.json', summary:{critical:0,warning:2}, completed_at:'...'}.",
       "required": ["is_already_audited"],
       "properties": {
         "is_already_audited": {
           "type": "boolean",
           "default": false,
-          "description": "True once the integrity reviewer subagent has run on this logbook at least once and findings have been processed. Set back to false in logbook-update when material changes are made so a fresh audit runs."
+          "description": "Legacy (v2). True once the integrity reviewer has run at least once and findings were processed. Set back to false in logbook-update on material changes. v3 reads integrity.ran; this flag is kept for backwards-compat."
         },
         "audit_file": {
           "type": "string",
-          "description": "Relative path to the most recent audit report JSON, e.g. 'ai_files/waves/wN/audits/logbook-<basename>.json'. Absent until the first audit completes.",
-          "$comment": "The reviewer always overwrites the same audit file path on re-audit; if historical audits are needed, copy the file before re-running."
-        }
+          "description": "Legacy (v2). Relative path to the most recent integrity audit report JSON. Superseded by integrity.report_file in v3; kept for backwards-compat.",
+          "$comment": "The reviewer overwrites the same audit file path on re-audit; copy it first if history is needed. migrate_v2_to_v3 maps this to integrity.report_file."
+        },
+        "integrity": { "$ref": "#/$defs/gate_result" },
+        "correctness_postplan": { "$ref": "#/$defs/gate_result" },
+        "correctness_postimpl": { "$ref": "#/$defs/gate_result" }
       }
     },
 
@@ -261,13 +417,13 @@
           "type": "string",
           "maxLength": 180,
           "description": "Verifiable outcome statement that serves as acceptance criteria. When this statement is true, the objective is achieved.",
-          "$comment": "Write as outcome, not task. Validate: Can you answer 'Is this done?' with yes/no by inspecting code? If not, rewrite."
+          "$comment": "ONE verifiable outcome per objective. Write as outcome, not task; answer 'Is this done?' yes/no by inspecting code. STOP: split it when multi-concern: a '+' or ' y '/' and ', an em-dash carrying a design choice ('— Modelo A: ...'), a colon-list, a file/class inventory, or two verbs. >180 chars is almost always more than one concern. REDIRECT: the design choice → context; the proof/tests → verification_demonstrations (and secondary.test_cases); a second deliverable → a SECOND main objective. bad: 'Refactor pricing engine — Modelo A: tabla CTE; tests exhaustivos de bordes' (task + design + tests = 3 concerns). good: 'Pricing engine computes tiered totals correctly' (design → context, tests → verification_demonstrations)."
         },
         "context": {
           "type": "string",
           "maxLength": 300,
           "description": "Business or technical rationale: who needs this, what problem it solves, relevant constraints or dependencies.",
-          "$comment": "Include information that helps make implementation decisions. Reference stakeholders, dependencies, or deadlines if relevant."
+          "$comment": "The business/technical WHY only — who needs it, what constraint forces the approach. REDIRECT: implementation steps/how (→ completion_guide), file lists (→ scope.files), rule IDs already stored in scope.rules (do NOT re-list them), and planning-process scratch labels ('Dimensión N', 'Mindset:', 'orthogonality_review' — those leak from the planning prompt and are not durable context). Test: delete every proper-noun class name; if no 'why' remains, you wrote 'how' in the wrong field. bad: 'Dimensión 2. Mindset: defensivo. Usar CTE recursivo con jitter = base*2^n, aplica rules #4 #7, tocar pricing_repo.dart...' (planning meta + how + rule re-list). good: 'Sales needs tiered pricing because enterprise contracts negotiate volume bands; current flat rate blocks the deal.'"
         },
         "scope": {
           "type": "object",
@@ -299,12 +455,94 @@
           "type": "string",
           "enum": ["not_started", "active", "blocked", "achieved", "abandoned"],
           "description": "Current state: not_started (pending work), active (in progress), blocked (waiting on external input), achieved (completed), abandoned (cancelled).",
-          "$comment": "Set only ONE main objective as 'active' at a time. Use 'blocked' when waiting for user input or external dependency. Set 'achieved' when content statement is verified true."
+          "$comment": "Set only ONE main objective as 'active' at a time. Use 'blocked' when waiting for user input or external dependency. Set 'achieved' ONLY when content statement is verified true AND all entries in verification_demonstrations have verdict='pass' (design_principle #8 — see field $comment for protocol)."
+        },
+        "verification_demonstrations": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Observable executable evidence that this primary outcome was achieved. Required on every NEW primary (forward-only per blueprint decision #15). Status='achieved' requires verdict='pass' on every entry. Empty/absent only on grandfathered historical logbooks.",
+          "$comment": "design_principle #8 (Demonstration over declaration). PROTOCOL (logbook-create Phase 4 w4): A4.5 verification-designer (fresh subagent, blocking) proposes type-aware demonstrations per primary based on scope.files extensions + content keywords (e.g., .dart/.ts→unit_test; .json schemas→schema_validation; .md skills→sandbox_execution+behavior_check; release/tag→release_verification). A4.6 feasibility-checker (fresh subagent, blocking) verifies local deps with deterministic checks (command -v, gh auth status); if missing_deps detected, A4 inserts provisioning secondaries BEFORE implementation — blocks 'paper demonstrations' by construction. Both subagents are UNCONDITIONAL (no primary skips A4.5+A4.6; if a primary cannot be expressed as verifiable it is ill-defined and must be re-formulated). Schema-level the field is optional to preserve forward-only (historical logbooks grandfathered); mandatory at gate-time. Bootstrap: Phase 1 w4 logbook (which builds this field) applies the principle in prose via completion_guide. DRY with test_cases (product_rule #10): when a primary's secondaries declared test_cases, the demonstration REFERENCES the suite covering them ('suite covering these cases passes, verdict=pass') and does NOT re-enumerate — test_cases SPECIFY (design), verification_demonstrations PROVE (achievement). Enumerate once, prove once.",
+          "items": {
+            "type": "object",
+            "description": "Single verification demonstration: one observable, executable check tied to an acceptance criterion of the primary.",
+            "$comment": "Each entry binds a verification TYPE to a concrete TARGET and an EXPECTED observable outcome. command_or_method must be deterministic for non-adversarial types. verdict='pending' until executed; flip to 'pass' or 'fail' with evidence.",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "unit_test",
+                  "integration_test",
+                  "sandbox_execution",
+                  "schema_validation",
+                  "behavior_check",
+                  "release_verification",
+                  "state_change_verification",
+                  "external_observation",
+                  "documentation_consistency",
+                  "adversarial_review"
+                ],
+                "description": "Verification taxonomy (10 types). Software-leaning: unit_test, integration_test. Agentic/cross-format: sandbox_execution, schema_validation, behavior_check. Cross-cutting: release_verification (tag/release published), state_change_verification (file/config/db delta), external_observation (3rd party API/visible artifact), documentation_consistency (docs vs reality), adversarial_review (fresh-subagent critique with value lens).",
+                "$comment": "A4.5 verification-designer infers type from primary's scope.files + content keywords. Pattern matching examples: .dart/.ts/.py → unit_test or integration_test; .json schemas → schema_validation + sandbox_execution (jq/ajv); .md commands/skills → sandbox_execution + behavior_check; .sh hooks → sandbox_execution; tag/release keywords → release_verification (gh api); settings/config changes → state_change_verification (jq query before/after)."
+              },
+              "target": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "Concrete artifact being verified — file path, function name, schema name, command, tag identifier, URL.",
+                "$comment": "Reference the actual artifact, not a description. Examples: 'plugin/skills/waves-protocol/references/logbook_software_schema.json', 'WavesStubCheck.detectEmptyBody', 'v3.0.0 git tag', 'POST /api/products endpoint'."
+              },
+              "expected": {
+                "type": "string",
+                "maxLength": 300,
+                "description": "Observable outcome that proves the demonstration passes. Must be checkable and bound to an acceptance criterion of the primary.",
+                "$comment": "Concrete, not aspirational. Examples: 'jq empty exits 0', 'ajv validate returns valid=true', 'gh api repos/owner/repo/releases/tags/v3.0.0 returns HTTP 200', 'critic verdict in [confirmed, gold]'. Avoid 'should work', 'looks correct', 'no errors'."
+              },
+              "command_or_method": {
+                "type": "string",
+                "maxLength": 300,
+                "description": "Deterministic command, script invocation, or subagent prompt that executes this demonstration. May be empty only when type='adversarial_review' (method described inline in evidence).",
+                "$comment": "Shell command for deterministic types; brief subagent role description for adversarial_review. Examples: 'jq empty plugin/skills/.../schema.json', 'ajv validate -s schema.json -d fixture.json', 'gh api repos/exovian-developments/waves-cowork-plugin/tags', 'critic subagent reviewing test for circular assertions'."
+              },
+              "verdict": {
+                "type": "string",
+                "enum": ["pending", "pass", "fail"],
+                "default": "pending",
+                "description": "Execution outcome of this demonstration. status='achieved' on the primary REQUIRES verdict='pass' on ALL entries.",
+                "$comment": "Stays 'pending' until objectives-implement Step 7.5 critic runs the demonstration. Flip to 'pass' when expected matches observed; 'fail' otherwise with reason in evidence. NEVER leave 'pending' when marking primary as achieved — the gate blocks."
+              },
+              "verified_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC ISO 8601 timestamp when verdict was recorded. Absent while verdict='pending'.",
+                "$comment": "Set ONCE when verdict flips from 'pending'. Immutable after. Used by audits to detect stale verdicts vs current artifact state."
+              },
+              "evidence": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Observable proof supporting the verdict: command stdout snippet, file diff summary, URL of public artifact, subagent classification with rationale.",
+                "$comment": "Concrete and auditable. Examples for pass: 'jq exit 0 on file (256 lines)', 'ajv: valid=true', 'critic verdict=confirmed — substance matches acceptance criterion'. For fail: error line + reason. Required when verdict != 'pending'."
+              }
+            },
+            "required": ["type", "target", "expected"]
+          }
         }
       },
       "required": ["id", "created_at", "content", "context", "scope", "status"]
     },
 
+    "gate_result": {
+      "type": "object",
+      "description": "Result of one audit/review gate (integrity, correctness post-plan, correctness post-impl), persisted as a first-class object so the corpus miner can read it across logbooks.",
+      "$comment": "STOP: one gate run per object — do not accumulate multiple runs here (the report_file is overwritten; copy it first if history is needed). REDIRECT: the full findings list lives in the file at report_file (design_principle #11 — analyses are persisted, not ephemeral); summary holds only compact counts/verdict; the logbook's narrative goes in recent_context. bad: 'summary': {note: 'several issues, see chat'} (prose, ephemeral). good: 'ran': true, 'report_file': 'waves_files/waves/wN/audits/correctness-postplan-phase_1.json', 'summary': {critical: 0, warning: 6}, 'completed_at': '2026-05-30T00:00:00Z'.",
+      "properties": {
+        "ran": { "type": "boolean", "description": "True if this gate executed for the current logbook state (it may still have executed INCOMPLETE — see degraded)." },
+        "report_file": { "type": "string", "description": "Relative path to the persisted analysis JSON for this gate, e.g. 'waves_files/waves/wN/audits/<gate>-<basename>.json'." },
+        "summary": { "type": "object", "description": "Compact counts/verdict for quick reading (e.g. {critical, warning} or {confirmed, smoke}). Full detail lives in report_file." },
+        "completed_at": { "type": "string", "format": "date-time", "description": "UTC timestamp when this gate completed." },
+        "degraded": { "type": "boolean", "description": "True when the gate executed INCOMPLETE: one or more reviewer lenses (or their verifier B) fell — failed, timed out, returned non-JSON, or reported unreadable_input. ran:true + degraded:true means 'executed but its coverage claim is partial'. A degraded gate blocks the logbook's completion claim (no resolution-create) until the fallen lens re-runs or a correctness_gate_override is documented in resolved_decisions." },
+        "fallen_reviewers": { "type": "array", "items": { "type": "string" }, "description": "Names of the lenses that fell when degraded:true (e.g. 'waves-coverage-gap-analyzer'). Empty/absent when the gate ran complete." }
+      },
+      "required": ["ran"]
+    },
     "secondary_objective": {
       "type": "object",
       "description": "Actionable objective derived from code analysis. Contains specific implementation guidance based on actual code inspection.",
@@ -316,6 +554,12 @@
           "description": "Unique identifier across all secondary objectives. Immutable once created.",
           "$comment": "Start at 1, increment globally across all secondary objectives. Never reuse IDs."
         },
+        "parent_main_id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Id of the main objective this secondary serves. Secondaries are a flat list; this links each one to its primary.",
+          "$comment": "Optional (backwards-compat: pre-existing logbooks have a flat list with no link). STOP: one parent per secondary — a secondary that serves two primaries is two secondaries. REDIRECT: this is the structural primary->secondary link only; rule inheritance still flows from the parent's scope.rules, not from here. bad: parent_main_id pointing at a non-existent main id, or a secondary whose content advances primary 1 carrying parent_main_id 2. good: parent_main_id 2 on a secondary whose content advances main objective 2."
+        },
         "created_at": {
           "type": "string",
           "format": "date-time",
@@ -326,7 +570,7 @@
           "type": "string",
           "maxLength": 180,
           "description": "Specific verifiable outcome that contributes to ticket completion. Should be completable in a focused work session.",
-          "$comment": "Be granular. Validate: Can this be completed and verified in one session? If not, split into multiple objectives."
+          "$comment": "ONE verifiable step per secondary, completable+verifiable in one session. STOP: split it when multi-concern: a '+' or ' y '/' and ', a colon-list, a file/class inventory, two verbs, or a design choice on an em-dash. >180 chars is almost always more than one concern. REDIRECT: the how → completion_guide; the API surface → function_signatures; the scenarios → test_cases; a second deliverable → a SECOND secondary. bad: 'Crear UserRepository + UserDto + migración 011 + tests' (4 concerns). good: 'UserRepository.findByEmail returns the matching user or null' (one verifiable step; signature → function_signatures, scenarios → test_cases)."
         },
         "completion_guide": {
           "type": "array",
@@ -336,7 +580,47 @@
             "maxLength": 200
           },
           "description": "Step-by-step implementation guidance based on code analysis. References specific files, patterns, line numbers, and applicable rules + YAGNI principle applied to the design.",
-          "$comment": "Each item must reference actual code or rules. Format: 'Use pattern from src/file.ts:45' or 'Apply rule #7: description'. No generic advice. When creating each item always apply the YAGNI principle."
+          "$comment": "ONE concrete how-step per array item, each anchored to real code or a rule. STOP: split into two items when multi-concern: a '+'/' and ', a colon-list of actions, or two verbs in one string. >200 chars almost always = more than one step. REDIRECT: the WHY → the parent objective's context; the outcome being achieved → the objective's content; the acceptance proof → verification_demonstrations/test_cases. No generic advice; apply YAGNI per item. bad: 'Refactor the repo: add findByEmail using the pattern in user_repo.dart, then wire the DTO and add edge tests, because enterprise needs it' (steps + why + tests fused). good: 'Add findByEmail(String email) to user_repo.dart:45 following the existing findById query pattern; apply rule #7.'"
+        },
+        "function_signatures": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 },
+          "description": "Concrete function/method signatures this secondary creates or modifies. Real types — no 'any'/'dynamic'/'Object?'. Optional; omit for doc-only or greenfield-no-API secondaries.",
+          "$comment": "DESIGN SPECIFICATION (design_principle #10). Forces confronting the real API surface at plan time, e.g. 'func (a *App) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd)'. Generics are IN scope but MUST declare explicit type-parameter bounds (no unbounded any/dynamic/Object?/interface{} unless architecturally justified — put the justification in the secondary's content). A generic's correctness lives in its instantiations, so test_cases MUST include one edge_case row per concrete instantiation that matters. An unbounded generic with zero instantiation test_cases is the same blind spot as an unconsidered edge case."
+        },
+        "test_cases": {
+          "type": "array",
+          "description": "Behavioral scenarios this secondary must satisfy: happy paths + edge cases. DESIGN SPEC, not proof. Optional; populate for code-touching secondaries (design_principle #10, product_rule #10).",
+          "$comment": "test_cases SPECIFY behavior at design time and carry NO verdict. The primary's verification_demonstrations PROVE the suite passes (verdict=pass) by REFERENCE — enumerate once here, prove once there, no duplication (product_rule #10). A secondary touching shared state, async, or sibling handlers with ZERO edge_case:true rows is SUSPECT.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 120,
+                "description": "Identifier of the scenario (what is being tested), not of the implementation. e.g. 'paste during active probe', not 'test_handlePaste_1'.",
+                "$comment": "Name the behavior/condition so the row is meaningful before any code exists."
+              },
+              "input": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "Concrete trigger or precondition for the scenario. Optional for cases defined purely by state.",
+                "$comment": "Be concrete: real values/events, e.g. 'PasteMsg arrives while state == probing'. Omit only when the scenario is fully described by name + expected."
+              },
+              "expected": {
+                "type": "string",
+                "maxLength": 300,
+                "description": "The behavioral contract: what MUST happen. For edge_case:true rows this is the forcing function — see $comment.",
+                "$comment": "When edge_case=true and this is EMPTY, the secondary is NOT ready and the logbook is BLOCKED. Filling it requires reading the sibling handlers/code to learn the invariant the new code must preserve. That empty->filled transition is exactly the work that catches relational runtime bugs (design_principle #10)."
+              },
+              "edge_case": {
+                "type": "boolean",
+                "description": "THE forcing-function flag. true = boundary / concurrency / error-recovery / cross-handler-interaction case; false = happy path.",
+                "$comment": "Set true for any scenario at a boundary, under concurrency, on an error/recovery path, or that interacts with sibling handlers/shared state. An edge_case:true row with empty 'expected' blocks the logbook until resolved."
+              }
+            },
+            "required": ["name", "edge_case"]
+          }
         },
         "status": {
           "type": "string",

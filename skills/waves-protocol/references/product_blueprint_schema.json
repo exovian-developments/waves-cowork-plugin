@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Product Blueprint Schema",
   "description": "Complete product definition document. Answers WHAT the product is and WHY it exists. Sits above logbook_roadmap (WHEN/ORDER) and individual logbooks (HOW) in the artifact hierarchy: blueprint → roadmap → logbook.",
-  "$comment": "One per product. Definitive source of truth for product identity, capabilities, flows, rules, and decisions. The roadmap extracts its vision section from this document. Work section by section with the product owner — do not fill sections speculatively. Every section must be validated by the owner before proceeding. When blueprint_type is 'autonomous_entity', the autonomous_entity_identity section is required. The two .md reference schemas (product_blueprint_schema.md for standard, product_blueprint_autonomous_entity_schema.md for entity products) are preserved as documentation — this JSON schema formalizes and unifies both.",
+  "$comment": "One per product. Definitive source of truth for product identity, capabilities, flows, rules, and decisions. The roadmap extracts its vision section from this document. Work section by section with the product owner — do not fill sections speculatively; every section must be validated by the owner before proceeding. When blueprint_type is 'autonomous_entity', the autonomous_entity_identity section is required. CANONICAL SHAPE: the only top-level keys are those declared in properties (meta, parent_blueprint, philosophy, problem, target_users, product_hypothesis, mission, vision, out_of_scope, design_principles, essential_capabilities, non_essential_capabilities, autonomous_entity_identity, essential_flows_and_views, secondary_flows_and_views, product_rules, success_metrics, tech_stack, product_decisions, open_questions, product_roadmaps). The blueprint is durable identity, NOT rolling memory: it does NOT carry recent_context, history_summary, ecosystem_notes, or provider_api — working memory lives in the roadmap/logbooks, technical detail in project_manifest. (philosophy IS durable identity and is a declared key; recent_context/history_summary are rolling memory and belong in the roadmap/logbook.) An undeclared sibling field is the signal you are writing in the wrong artifact: stop and route the content to its correct one. The two .md reference schemas (product_blueprint_schema.md for standard, product_blueprint_autonomous_entity_schema.md for entity products) are preserved as documentation — this JSON schema formalizes and unifies both.",
   "type": "object",
   "properties": {
     "meta": {
@@ -45,6 +45,21 @@
         }
       },
       "required": ["product_name", "owner", "created_at", "last_updated", "blueprint_type"]
+    },
+
+    "parent_blueprint": {
+      "type": "string",
+      "description": "Path relativo al blueprint padre. PRESENCIA = scoped-blueprint; AUSENCIA = root blueprint.",
+      "$comment": "Tree blueprints (Waves 3.x multi-project). Permite nesting N-level: company_blueprint → product_blueprint → scope_blueprint → component_blueprint. Scoped-blueprint hereda governance del padre (LLM lo lee como contexto adicional). Cycle detection es responsabilidad runtime (path resolution con visited-set), no schema validation — el schema permite cualquier cadena de paths. Ejemplo: 'waves_files/projects/diamond-tui/blueprint.json' tiene parent_blueprint: '../../blueprint.json'."
+    },
+
+    "philosophy": {
+      "type": "object",
+      "description": "The durable WHY behind the product — the founding insight and the reasoning that justifies its existence and approach. Optional; present when the product has an articulated point of view (e.g. why this model over the incumbents).",
+      "$comment": "Optional, durable identity (NOT rolling memory — this resolves the corpus gap where philosophy was used yet undeclared). STOP: timeless WHY only — the founding insight and why-this-approach. REDIRECT: version history / 'desde v2.0...' -> product_decisions; running progress -> roadmap recent_context; HOW it works -> essential_flows_and_views + project_manifest. A common shape is {core_insight, why_not_<incumbent>, why_<this>} but the keys are free-form. bad: 'Desde v2.0 añadimos hooks porque...' (changelog). good: core_insight: 'AI compressed development from months to days; the bottleneck is now human validation, not coding.'",
+      "properties": {
+        "core_insight": { "type": "string", "description": "The single founding insight the product is built on." }
+      }
     },
 
     "problem": {
@@ -266,7 +281,7 @@
     "tech_stack": {
       "type": "string",
       "description": "Technologies, platforms, integrations, and technical constraints that condition the build.",
-      "$comment": "Prose format. List: languages, frameworks, infrastructure, cloud services, third-party integrations, deployment targets (web, mobile, desktop), and any hard technical constraints. This section informs the roadmap's Foundation phase and all technical decisions. Keep factual — decisions and rationale go in product_decisions, not here."
+      "$comment": "STOP: a factual inventory only — languages, frameworks, infrastructure, cloud services, third-party integrations, deployment targets (web/mobile/desktop), and hard technical constraints. REDIRECT: FORBIDDEN here — rationale, changelog, rejected alternatives, and pricing/cost notes ('Supabase descartado porque... $25/mo'). Each chosen-vs-rejected story is a product_decision; this field names only what IS in the stack. Trigger words to flag: 'because / porque / descartado / vs / desde vX'. Bad: 'PostgreSQL (Supabase descartado porque $25/mo era caro), Dart'. Good: 'PostgreSQL, Dart' (the Supabase comparison and its cost go to product_decisions). This section informs the roadmap’s Foundation phase."
     },
 
     "product_decisions": {
@@ -290,7 +305,7 @@
     "product_roadmaps": {
       "type": "array",
       "description": "Ordered list of roadmaps associated with this product. Most recent roadmap first (prepend-only).",
-      "$comment": "This array is the authoritative link between the blueprint and its roadmaps. It is managed EXCLUSIVELY by the roadmap-create command — never insert entries manually or from blueprint-create. New entries are always prepended (index 0), never appended. For new products or new blueprints, this array starts empty. Each entry contains the wave name and the relative path to the roadmap file within ai_files/. The roadmap files themselves contain logbook references that complete the traceability chain: blueprint → roadmap → logbook.",
+      "$comment": "This array is the authoritative link between the blueprint and its roadmaps. It is managed EXCLUSIVELY by the roadmap-create command — never insert entries manually or from blueprint-create. New entries are always prepended (index 0), never appended. For new products or new blueprints, this array starts empty. Each entry contains the wave name and the relative path to the roadmap file within waves_files/. The roadmap files themselves contain logbook references that complete the traceability chain: blueprint → roadmap → logbook.",
       "items": {
         "$ref": "#/$defs/product_roadmap_ref"
       },
@@ -363,7 +378,7 @@
           "type": "string",
           "maxLength": 300,
           "description": "The guiding premise.",
-          "$comment": "Must be specific enough to generate concrete rules. Bad: 'The product should be user-friendly'. Good: 'When the user is mid-calculation, the system must not interrupt with non-critical information'. If a principle is too vague to generate rules, it is not a principle — it is a wish."
+          "$comment": "STOP: ONE guiding premise per entry. If the text uses '+', 'y', an em-dash, or enumerates several directives, it is multi-concern — split into separate principles. REDIRECT: FORBIDDEN here — the concrete rule ('If X then Y') goes in product_rules; version history / changelog ('Desde v2.0.0...', '5 variantes') goes in product_decisions; rationale belongs in the decision that adopted it. Trigger words to flag: 'because / since / desde vX'. Must be specific enough to generate a rule — if too vague it is a wish, not a principle. Bad: 'Sealed result type con 5 variantes desde v2.0.0 para tipar errores'. Good: 'The system must surface every failure as a typed, exhaustively-matchable result' (the 5-variant count and v2.0.0 origin become a product_decision)."
         },
         "rules_preview": {
           "type": "array",
@@ -390,13 +405,30 @@
           "type": "string",
           "maxLength": 300,
           "description": "What the user can do.",
-          "$comment": "Natural language. Specific in responsibility, clear in boundaries. Include what this capability covers AND what it explicitly does not cover when the boundary is not obvious."
+          "$comment": "STOP: ONE capability per entry, phrased 'The user can [action]'. If the text uses '+', 'y', an em-dash, or enumerates deliverables/views/phases, it is multi-concern — split it (one verb = one capability). REDIRECT: FORBIDDEN here — class/package names, endpoints, CLI commands, view IDs, sub-config, and version/lifecycle notes ('ABSORBIDA en CAP-17', 'DEPRECATED'). What-was-built goes in project_manifest; how/why in product_decisions; screens in flows/views; a status change becomes a product_decision. A prohibition without a destination only relocates the content to invented fields (e.g. provider_api/ecosystem_notes seen in the corpus) — always name the destination. A lifecycle change sets the `status` field (+ superseded_by), with the reason in a product_decision. Bad: 'El usuario puede registrarse Y autenticarse via Firebase Auth con custom claims'. Good: 'The user can create an account' + a separate 'The user can sign in' (the Firebase/custom-claims choice is a product_decision)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "absorbed", "deprecated"],
+          "description": "Lifecycle of this capability. Defaults to active when omitted.",
+          "$comment": "Optional. Officializes the lifecycle authors were writing inline ('ABSORBIDA en CAP-17', 'DEPRECATED') — that prose is FORBIDDEN in `capability`; set it here as structured data the corpus miner can read. STOP: one status value. REDIRECT: the reason/when goes in a product_decision, not here; if absorbed/deprecated, name the successor in superseded_by. bad: capability text 'ABSORBIDA en CAP-17'. good: status 'absorbed', superseded_by 17, rationale in a product_decision."
+        },
+        "superseded_by": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "When status is absorbed or deprecated, the id of the capability that replaces this one (same list).",
+          "$comment": "Optional. Only meaningful with status absorbed/deprecated. References a capability id in the same list."
         },
         "depends_on": {
           "type": "array",
           "items": { "type": "integer", "minimum": 1 },
           "description": "IDs of capabilities within the same list that must exist first.",
           "$comment": "Optional. References capabilities in the same list only. If a capability has dependencies, they must appear before it in the array. Empty array or omitted means no dependencies. Non-essential capabilities implicitly depend on essential ones — no need to declare that cross-list dependency."
+        },
+        "child_blueprint": {
+          "type": "string",
+          "description": "OPCIONAL — path a un scoped-blueprint que elabora esta capability con su propia complejidad.",
+          "$comment": "Tree blueprints (Waves 3.x multi-project). Usar cuando la capability merece su propio blueprint (alta complejidad, equipo dedicado, lifecycle independiente). El scoped-blueprint apuntado debe tener parent_blueprint apuntando de vuelta al padre. Ejemplo: company_blueprint.essential_capabilities[i].child_blueprint = 'projects/exobase_med/blueprint.json'."
         }
       },
       "required": ["id", "capability"]
@@ -547,9 +579,9 @@
         },
         "rule": {
           "type": "string",
-          "maxLength": 300,
+          "maxLength": 800,
           "description": "The behavioral rule.",
-          "$comment": "Format: 'If [condition], then [behavior]'. Must be specific and unambiguous. A developer should know exactly what to implement. Bad: 'Handle errors gracefully'. Good: 'If the calculation input contains a negative percentage, display an inline error message and prevent form submission'."
+          "$comment": "STOP: ONE rule per entry, phrased 'If [condition], then [behavior]' or 'When [context], [action]'. If the text uses '+', 'y', an em-dash, or chains multiple conditions/behaviors, it is multi-concern — split it. REDIRECT: FORBIDDEN here — history/changelog ('eliminado en W3', 'agregado en W8'), rationale (the WHY lives in the originating design_principle via principle_refs), and rejected alternatives (those are a product_decision). Trigger words to flag: 'because / since / eliminado en / desde vX'. A prohibition without a destination relocates content — route it. Must be unambiguous: a developer implements it without asking. Bad: 'Handle errors gracefully (agregado en W8, antes era reintento simple)'. Good: 'If the calculation input contains a negative percentage, display an inline error message and prevent form submission' (the W8 change history is a product_decision)."
         },
         "principle_refs": {
           "type": "array",
@@ -621,13 +653,13 @@
           "type": "string",
           "maxLength": 300,
           "description": "What was decided.",
-          "$comment": "Clear, unambiguous statement. E.g., 'Use Firebase Auth with custom claims for role management'. Not 'We might use Firebase'."
+          "$comment": "STOP: ONE resolved fork per entry, stated as ONE declarative clause ('Adopt X over Y'). If the text uses '+', 'y', an em-dash, or chains several choices, it is multi-concern — split into separate decisions. REDIRECT: FORBIDDEN here — the reasoning/alternatives (those go in context), a progress report or completion tally ('[AUTO] Phase N COMPLETED, M/N primaries...'), and file inventories (those are roadmap recent_context). If the text describes work done rather than a fork that was resolved, it is NOT a decision — do not record it here. A prohibition without a destination relocates content — route it. Bad: '[AUTO] Phase 7 COMPLETED — 6/6 primaries done, added auth.dart + user_repo.dart + 4 tests, chose Firebase'. Good: 'Adopt Firebase Auth with custom claims over a custom JWT service for role management' (the why goes in context; the completion tally/file list goes to the roadmap)."
         },
         "context": {
           "type": "string",
           "maxLength": 500,
           "description": "Why this was decided, what alternatives were considered, what was discarded.",
-          "$comment": "Include: the trigger (what forced the decision), alternatives evaluated, why this option won, and what was explicitly discarded. The more context, the less future re-discussion."
+          "$comment": "STOP: the WHY of ONE decision — the trigger that forced it, alternatives evaluated, why this option won, what was discarded. If it reads as multiple decisions’ reasoning fused, split alongside its decision. REDIRECT: FORBIDDEN here — implementation steps / how-to (CTEs, formulas, code go in the logbook), planning-process labels ('Dimensión N', 'Mindset:', 'orthogonality_review' are planning scratch, not durable context), and re-listed rule/capability IDs (they live in their own sections). Test: remove every proper-noun class name — if no 'why' remains, you wrote 'how' in the wrong field. Bad: 'Dimensión 2 / Mindset: implementar con CTE recursivo y jitter exponencial en backoff.dart...'. Good: 'Email retries overwhelmed the SMTP provider during bursts; exponential backoff with jitter was chosen over fixed-interval retry to avoid thundering-herd, ruling out a simple loop'."
         },
         "impact_on": {
           "type": ["string", "null"],
@@ -681,7 +713,7 @@
     "product_roadmap_ref": {
       "type": "object",
       "description": "Reference to a roadmap file associated with this product.",
-      "$comment": "Managed exclusively by roadmap-create. New entries are always prepended (index 0) — the first element is the most recent roadmap. Never append. Never insert manually from blueprint-create. The path is relative to ai_files/ within the same repository. For cross-project roadmaps, the path may use the portable format org/repo::waves/wN/roadmap.json.",
+      "$comment": "Managed exclusively by roadmap-create. New entries are always prepended (index 0) — the first element is the most recent roadmap. Never append. Never insert manually from blueprint-create. The path is relative to waves_files/ within the same repository. For cross-project roadmaps, the path may use the portable format org/repo::waves/wN/roadmap.json.",
       "properties": {
         "wave": {
           "type": "string",
@@ -690,7 +722,7 @@
         },
         "path": {
           "type": "string",
-          "description": "Relative path to the roadmap file from ai_files/.",
+          "description": "Relative path to the roadmap file from waves_files/.",
           "$comment": "Standard format: waves/wN/roadmap.json. For cross-project references: org/repo::waves/wN/roadmap.json."
         }
       },

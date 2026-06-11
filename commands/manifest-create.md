@@ -4,7 +4,29 @@ description: Analyze project and create structured manifest. Supports software p
 
 # Command: /waves:manifest-create
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
 You are executing the waves manifest creation command. Follow these instructions exactly.
+
+## Multi-project scope
+
+Apply the **Multi-project Path Resolution** helper from `plugin/skills/waves-protocol/SKILL.md` before any other step:
+
+- Parse `--project <name>` from the command arguments.
+- If present: set `base_path = projects/<name>/waves_files/` and validate that projects/<name>/ exists (abort with a "scope not found" error if it does not).
+- If absent: set `base_path = waves_files/` (backwards-compatible default — identical to pre-3.x single-project behavior).
+
+Use `base_path` for every `waves_files/...` reference in the steps below. When the steps say `waves_files/<artifact>` they mean `<base_path><artifact>` in multi-project mode.
+
+When `--project` is present, also write the **session marker** via bash BEFORE any artifact operation — this is what makes the active scope visible to hooks (`plugin/hooks/_lib/scope-resolve.sh`) when they fire on subsequent Edit/Write:
+
+```bash
+mkdir -p "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}"
+printf '%s=%s\n' "$(printf '%s' "$PWD" | { md5 -q 2>/dev/null || md5sum | awk '{print $1}'; })" "<scope_name>" \
+  > "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}/active-scope"
+```
+
+Idempotent (overwrite-safe). The marker maps `<cwd_md5>=<scope_name>` so a session that traverses multiple cwds keeps one line per cwd. When `--project` is absent, **do not write** the marker — hooks fall back to root naturally.
 
 ## Your Role
 
@@ -12,13 +34,13 @@ You are the main orchestrator for project manifest creation. Based on the projec
 
 ## Step -1: Prerequisites Check (CRITICAL)
 
-Check if `ai_files/user_pref.json` exists.
+Check if `waves_files/user_pref.json` exists.
 
 IF NOT EXISTS, display:
 ```
 ⚠️ Missing configuration!
 
-The file ai_files/user_pref.json was not found.
+The file waves_files/user_pref.json was not found.
 
 Please run first:
 /waves:project-init
@@ -29,7 +51,7 @@ which are required before creating the manifest.
 → EXIT COMMAND
 
 IF EXISTS:
-1. Read `ai_files/user_pref.json`
+1. Read `waves_files/user_pref.json`
 2. Extract `user_profile.preferred_language` → Use for all interactions
 3. Extract `project_context.project_type` → Determines main flow
 4. Extract `project_context.is_project_known_by_user` → Determines subflow
@@ -38,7 +60,7 @@ If any required field is missing:
 ```
 ⚠️ Incomplete configuration!
 
-Your ai_files/user_pref.json is missing required fields.
+Your waves_files/user_pref.json is missing required fields.
 
 Please run:
 /waves:project-init
@@ -69,8 +91,8 @@ IF No → Exit with: "Command cancelled. No files were created."
 ## Step 1: Check Existing Manifest
 
 Check if manifest already exists:
-- For software: `ai_files/project_manifest.json`
-- For general: `ai_files/general_manifest.json`
+- For software: `waves_files/project_manifest.json`
+- For general: `waves_files/general_manifest.json`
 
 IF EXISTS:
 ```
@@ -207,7 +229,7 @@ Write your features:
 
 **Generate Template Manifest:**
 
-Create `ai_files/project_manifest.json` with:
+Create `waves_files/project_manifest.json` with:
 - User's answers
 - Smart defaults based on stack (build tool, package manager, patterns)
 - `llm_notes.recommended_actions` with next steps
@@ -217,7 +239,7 @@ Create `ai_files/project_manifest.json` with:
 ✅ Project manifest created!
 
 📁 Generated file:
-  • ai_files/project_manifest.json
+  • waves_files/project_manifest.json
 
 📋 Project summary:
   • Type: [type]
@@ -371,8 +393,8 @@ Choose 0-2:
 **Phase 7: Generate Artifacts**
 
 Generate:
-- `ai_files/project_manifest.json`
-- `ai_files/architecture_map.json`
+- `waves_files/project_manifest.json`
+- `waves_files/architecture_map.json`
 
 Validate against schemas.
 
@@ -381,8 +403,8 @@ Validate against schemas.
 ✅ Analysis complete and manifest created!
 
 📁 Generated files:
-  • ai_files/project_manifest.json
-  • ai_files/architecture_map.json (detailed architecture map)
+  • waves_files/project_manifest.json
+  • waves_files/architecture_map.json (detailed architecture map)
 
 🔍 Main findings:
 
@@ -517,7 +539,7 @@ Ask 5 questions:
 4. **Timeline/Milestones**
 5. **Citation Format** (APA, MLA, Chicago, IEEE, etc.)
 
-Generate `ai_files/general_manifest.json` with research structure.
+Generate `waves_files/general_manifest.json` with research structure.
 
 ---
 
@@ -531,7 +553,7 @@ Ask 5 questions:
 4. **Assets Needed**
 5. **Deliverables/Milestones**
 
-Generate `ai_files/general_manifest.json` with creative structure.
+Generate `waves_files/general_manifest.json` with creative structure.
 
 ---
 
@@ -549,7 +571,7 @@ Ask 9 Business Model Canvas questions:
 8. **Key Partnerships**
 9. **Customer Relationships**
 
-Generate `ai_files/general_manifest.json` with business canvas structure.
+Generate `waves_files/general_manifest.json` with business canvas structure.
 
 ---
 
@@ -563,7 +585,7 @@ Ask 5 generic questions:
 4. **Expected Deliverables**
 5. **Milestones/Timeline**
 
-Generate `ai_files/general_manifest.json`.
+Generate `waves_files/general_manifest.json`.
 
 ---
 
@@ -637,14 +659,14 @@ Consolidate findings and present:
 
 **Phase 5: Generate Manifest**
 
-Generate `ai_files/general_manifest.json` populated with discovered content.
+Generate `waves_files/general_manifest.json` populated with discovered content.
 
 **Success Message:**
 ```
 ✅ Analysis and manifest complete!
 
 📁 Generated file:
-  • ai_files/general_manifest.json
+  • waves_files/general_manifest.json
 
 🔍 What I discovered about your project:
   [summary]
@@ -740,7 +762,7 @@ Ask:
   - persistent: subagents live in background with their own state.
   - hybrid: mix (e.g. one listener is persistent, extractors are ephemeral).
 
-(f) Where will per-subagent logbooks live? (default: `ai_files/waves/wN/subagent_logbooks/`)
+(f) Where will per-subagent logbooks live? (default: `waves_files/waves/wN/subagent_logbooks/`)
 ```
 
 Capture: `orchestration.primary_agent.role_ref`, `orchestration.primary_agent.talks_to_owner` (default true), `orchestration.communication_protocol`, `orchestration.write_ownership_policy`, `orchestration.approval_gates[]`, `subagents.lifecycle`, `subagents.logbooks_dir`.
@@ -871,15 +893,15 @@ Build the manifest JSON populating the 15 sections with the captured data. Apply
 - `roles` is required (at least 1 entry).
 - All other sections are optional — omit if user typed `skip` or gave no data.
 
-Validate against `ai_files/schemas/agentic_manifest_schema.json` using JSON Schema validation. If validation fails, surface the specific error to the user and offer to correct it inline.
+Validate against `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/agentic_manifest_schema.json` using JSON Schema validation. If validation fails, surface the specific error to the user and offer to correct it inline.
 
-Save to `ai_files/project_manifest.json` (same path used by software/general — the consuming command infers the manifest shape from `user_pref.project_context.project_type`).
+Save to `waves_files/project_manifest.json` (same path used by software/general — the consuming command infers the manifest shape from `user_pref.project_context.project_type`).
 
 Present a declaration (not an approval request):
 ```
 ✅ Agentic manifest generated
 
-📁 ai_files/project_manifest.json
+📁 waves_files/project_manifest.json
 
 Sections populated:
   ✓ project ([kind])
@@ -918,7 +940,7 @@ Scan the current directory for:
 - `skills/` directory — if present, count files and detect format (look for frontmatter markers in first file).
 - `hooks/` or `.claude/hooks/` — count hook scripts.
 - `.claude/settings.json` — detect MCP servers configured.
-- `ai_files/waves/` — detect existing wave structure.
+- `waves_files/waves/` — detect existing wave structure.
 - Any obvious `subagents/`, `agents/`, `prompts/` directories.
 
 Present findings:
@@ -941,7 +963,7 @@ Run Steps C1.1 through C1.6, but for each section show pre-filled values derived
 - skills.directory → `skills/` (from scan)
 - skills.format → detected from frontmatter presence
 - tools → derived from `.claude/settings.json` MCP servers
-- subagents.logbooks_dir → `ai_files/waves/wN/subagent_logbooks/` if `ai_files/waves/` exists
+- subagents.logbooks_dir → `waves_files/waves/wN/subagent_logbooks/` if `waves_files/waves/` exists
 
 The user reviews each pre-filled section and confirms or edits.
 
@@ -951,12 +973,16 @@ Same as Step C1.7.
 
 ---
 
+## The `relations[]` blast-radius graph (all project types — w6 Phase 10)
+
+Before saving, populate the `relations[]` array — the manifest's highest-value output and its reason to exist beyond a file/component tree. Each relation is a directed semantic edge `{from, to, kind, why}` capturing a coupling **grep cannot see**: a change to `from` can affect `to` (e.g. a feature-flags endpoint `guards` whether Notifications renders; a subagent `consumes` a tool; a survey deliverable `feeds` the final report). Only add edges that cross files, layers, or runtime boundaries — do NOT enumerate the plain import graph grep already finds. This graph is the substrate the cost sensor (cost-per-component), the corpus miner (findings per region), and the correctness layer all read; it is what makes scoping a logbook or `diverged_work` accurate. See the `relations` `$comment` in each manifest schema for the born-compliant guidance. Keep it proportional (KISS): the handful of couplings that would surprise a newcomer, not every edge.
+
 ## Validation
 
 Before saving any manifest, validate against the appropriate schema:
-- Software: `ai_files/schemas/software_manifest_schema.json`
-- General: `ai_files/schemas/general_manifest_schema.json`
-- Agentic: `ai_files/schemas/agentic_manifest_schema.json`
+- Software: `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/software_manifest_schema.json`
+- General: `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/general_manifest_schema.json`
+- Agentic: `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/agentic_manifest_schema.json`
 
 ---
 

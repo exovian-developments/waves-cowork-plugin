@@ -23,7 +23,7 @@
           "type": "string",
           "minLength": 1,
           "description": "High-level business description of the project.",
-          "$comment": "Business-level description. What does the app do? Who is it for? What problems does it solve? Avoid technical jargon."
+          "$comment": "STOP: ONE business sentence — what the product does and for whom. REDIRECT: architecture, monorepo layout, package lineage, import graph, build tools go in technical_details/platform_info, NOT here. If you name a build tool (Melos/Gradle) or a package, that clause belongs in technical_details. bad→good: Bad: 'Monorepo con Melos que contiene N paquetes, POST-MERGE de app_base...'. Good: 'Panel visual para editar artefactos Waves sin tocar JSON.'"
         },
         "creation_date": {
           "type": "string",
@@ -140,7 +140,7 @@
                 "description": "Libraries or concepts commonly used in the layer.",
                 "items": { "type": "string" },
                 "default": [],
-                "$comment": "Libraries, classes or conventions observed in this layer (e.g., ViewModel, StateFlow, UseCase, DAO)."
+                "$comment": "STOP/REDIRECT: only SHORT names of libraries, classes or conventions (e.g., ViewModel, StateFlow, UseCase, DAO, Freezed). NO per-file prose, NO descriptions, NO file paths — a name per item, not a sentence."
               }
             }
           },
@@ -153,11 +153,71 @@
 
     "features": {
       "type": "array",
-      "description": "Main end-user features of the project.",
-      "items": { "type": "string" },
+      "description": "Main end-user features of the project. Each item is EITHER a short string (canonical shorthand) OR a {name, description} object when a one-line clarification is genuinely needed — both validate.",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "Short noun-phrase a non-technical person recognizes." },
+              "description": { "type": "string", "description": "One-line clarification of the feature. NOT a changelog or rationale." }
+            },
+            "required": ["name"]
+          }
+        ]
+      },
       "default": [],
       "minItems": 1,
-      "$comment": "List of main features visible to end users (e.g., 'offline support', 'biometric login'). LLMs should look at main screens, routes and menus. Be very concise describing the features."
+      "$comment": "CANONICAL SHAPE: a string is the default; use the {name, description} object only when a one-line clarification adds real value (this resolves the two-shapes corpus gap — both are now valid, the rich object is no longer an invented variant). STOP: one feature = one short noun-phrase a non-technical person recognizes (<=~60 chars), like 'offline support', 'biometric login'. REDIRECT: FORBIDDEN class/method names, version tags (vX.Y.Z), performance numbers, rationale ('reduced from 20 to 7 because...'), architecture principles — those go in technical_details/architecture_identified, NOT here. If you wrote a ':' followed by an explanation, cut it (or move it to the object's description, kept to ONE line). bad: 'maxMessages reducido de 20 a 7: los datos...'. good: 'Conversación con límite de turnos' (or {name:'Conversación con límite de turnos', description:'El usuario fija el máximo de turnos'}). LLMs: look at main screens, routes and menus."
+    },
+
+    "key_files": {
+      "type": "array",
+      "description": "Optional declared inventory of the most important files/entry points, so authors stop inventing ungoverned 'files'/'path' keys (corpus gap). Each is {path, role}.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Repo-relative path of the file." },
+          "role": { "type": "string", "description": "One-line role of this file in the architecture (e.g. 'HTTP entrypoint', 'DI container', 'main router')." }
+        },
+        "required": ["path", "role"]
+      },
+      "default": [],
+      "$comment": "Optional. Officializes the recurring invented files/path keys (corpus pattern P4). STOP: only the genuinely load-bearing files (entry points, routers, DI, config roots) — not every file. REDIRECT: per-feature implementation detail goes in technical_details/architecture_identified, NOT here; this is a navigation index. bad: listing 200 files with multi-paragraph roles. good: {path:'lib/main.dart', role:'app entry point'} for the handful that orient a newcomer."
+    },
+
+    "relations": {
+      "type": "array",
+      "description": "The semantic blast-radius graph: directed edges that say 'a change to X can affect Y' — the couplings grep cannot see because they cross files, layers, or runtime boundaries (e.g. the feature-flags endpoint guards whether the Notifications feature renders).",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "kind", "why"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The source component the edge starts at — the one whose change can affect the target.",
+            "$comment": "STOP: name a component that EXISTS elsewhere in this manifest — a module name, a feature, a key_files path, or a layer. REDIRECT: do not invent free-floating labels; the graph is only navigable if from/to resolve to real manifest entries. bad: 'the auth stuff'. good: 'auth' (a declared module) or 'lib/main.dart' (a declared key_file)."
+          },
+          "to": {
+            "type": "string",
+            "description": "The target component the edge points at — the one affected when 'from' changes.",
+            "$comment": "Same discipline as 'from': a real component named elsewhere in the manifest. The edge reads from-kind-to: e.g. 'checkout' consumes 'payment_gateway'."
+          },
+          "kind": {
+            "type": "string",
+            "description": "The edge verb — HOW 'from' relates to 'to'. Open vocabulary; pick the most precise.",
+            "$comment": "Suggested verbs (OPEN — add others when none fit; recurring ones get officialized via the corpus miner): consumes (calls/imports/reads), triggers (causes to run — events, jobs, schedules), guards (gates behavior — a flag/permission/feature-toggle), feeds (produces data the other reads), extends (specializes/overrides). STOP: one lowercase verb, not a sentence — the sentence is 'why'."
+          },
+          "why": {
+            "type": "string",
+            "description": "The one-line reason this edge matters for blast-radius — what breaks or changes in 'to' when 'from' changes.",
+            "$comment": "STOP: the consequence, not a restatement of the verb. This is the WHOLE point of the edge — the thing grep cannot tell you. bad: 'checkout consumes payment_gateway' (just restates from/kind/to). good: 'changing charge()'s signature breaks checkout's retry path'. REDIRECT: no essays — one cause→effect clause."
+          }
+        }
+      },
+      "default": [],
+      "$comment": "OPTIONAL but high-value — the manifest's reason to exist beyond a file tree: a component's blast-radius at a glance, especially when scoping a logbook or diverged_work. STOP: only edges grep CANNOT find — cross-file/cross-layer/runtime couplings (feature↔endpoint↔flag, job↔queue↔handler). REDIRECT: a plain import grep finds in one hop is NOT worth an edge; do not enumerate the whole import graph. Born-compliant (product_rule #13): extra edge fields are allowed (the item is open) — recurring extras are officialization candidates surfaced by the corpus miner."
     },
 
     "llm_notes": {

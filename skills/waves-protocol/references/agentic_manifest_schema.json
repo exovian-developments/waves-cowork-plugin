@@ -108,7 +108,7 @@
         "logbooks_dir": {
           "type": "string",
           "description": "Directory path where per-subagent logbooks live. Each subagent owns its own logbook file (single_writer_per_file principle).",
-          "$comment": "Example: 'ai_files/waves/wN/subagent_logbooks/'."
+          "$comment": "Example: 'waves_files/waves/wN/subagent_logbooks/'."
         }
       }
     },
@@ -256,6 +256,39 @@
           }
         }
       }
+    },
+
+    "relations": {
+      "type": "array",
+      "description": "The semantic blast-radius graph: directed edges that say 'a change to X can affect Y' — the couplings grep cannot see because they cross prompt files, tool registrations, and runtime handoffs (e.g. a subagent consumes a tool; a trigger fires a pipeline; a governance rule guards a tool).",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "kind", "why"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The source component the edge starts at — the one whose change can affect the target.",
+            "$comment": "STOP: name a component that EXISTS elsewhere in this manifest — a subagent, a tool, a skill, a pipeline, a trigger, a state/handoff contract. REDIRECT: do not invent free-floating labels; the graph is only navigable if from/to resolve to real manifest entries. bad: 'the router thing'. good: 'orchestrator' or 'tool:send_email' (a declared tool)."
+          },
+          "to": {
+            "type": "string",
+            "description": "The target component the edge points at — the one affected when 'from' changes.",
+            "$comment": "Same discipline as 'from': a real component named elsewhere in the manifest. The edge reads from-kind-to: e.g. 'triage-subagent' consumes 'tool:lookup_account'."
+          },
+          "kind": {
+            "type": "string",
+            "description": "The edge verb — HOW 'from' relates to 'to'. Open vocabulary; pick the most precise.",
+            "$comment": "Suggested verbs (OPEN — add others when none fit; recurring ones get officialized via the corpus miner): consumes (calls a tool / reads a contract), triggers (fires a pipeline/subagent — events, schedules), guards (gates — a governance rule, an approval, a permission), feeds (produces state the other reads), handoff (passes control via a handoff_contract). STOP: one lowercase verb, not a sentence — the sentence is 'why'."
+          },
+          "why": {
+            "type": "string",
+            "description": "The one-line reason this edge matters for blast-radius — what breaks or changes in 'to' when 'from' changes.",
+            "$comment": "STOP: the consequence, not a restatement of the verb. This is the WHOLE point of the edge — the thing grep cannot tell you. bad: 'subagent consumes tool' (restates from/kind/to). good: 'changing the lookup_account schema breaks the triage-subagent's account-resolution step'. REDIRECT: one cause→effect clause, no essays."
+          }
+        }
+      },
+      "default": [],
+      "$comment": "OPTIONAL but high-value — the manifest's reason to exist beyond a component list: a component's blast-radius at a glance, especially when scoping a logbook or diverged_work. STOP: only edges grep CANNOT find — cross-prompt/cross-registration/runtime handoffs (subagent↔tool↔governance, trigger↔pipeline). REDIRECT: a tool simply being listed under a subagent's allowed-tools that grep finds in one hop is borderline; capture the couplings that surprise. Born-compliant (product_rule #13): extra edge fields are allowed (the item is open) — recurring extras are officialization candidates surfaced by the corpus miner."
     },
 
     "observability": {

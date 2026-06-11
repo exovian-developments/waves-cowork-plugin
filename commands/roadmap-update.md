@@ -5,7 +5,30 @@ allowed-tools: Read, Grep, Glob, Bash(git:*), Task
 
 # Plugin Command: roadmap-update
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
+
 You are executing the waves plugin roadmap update command. This is an interactive orchestrator that manages roadmap modifications, delegating complex updates to the roadmap-orchestrator agent.
+
+## Multi-project scope
+
+Apply the **Multi-project Path Resolution** helper from `plugin/skills/waves-protocol/SKILL.md` before any other step:
+
+- Parse `--project <name>` from the command arguments.
+- If present: set `base_path = projects/<name>/waves_files/` and validate that projects/<name>/ exists (abort with a "scope not found" error if it does not).
+- If absent: set `base_path = waves_files/` (backwards-compatible default — identical to pre-3.x single-project behavior).
+
+Use `base_path` for every `waves_files/...` reference in the steps below. When the steps say `waves_files/<artifact>` they mean `<base_path><artifact>` in multi-project mode.
+
+When `--project` is present, also write the **session marker** via bash BEFORE any artifact operation — this is what makes the active scope visible to hooks (`plugin/hooks/_lib/scope-resolve.sh`) when they fire on subsequent Edit/Write:
+
+```bash
+mkdir -p "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}"
+printf '%s=%s\n' "$(printf '%s' "$PWD" | { md5 -q 2>/dev/null || md5sum | awk '{print $1}'; })" "<scope_name>" \
+  > "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}/active-scope"
+```
+
+Idempotent (overwrite-safe). The marker maps `<cwd_md5>=<scope_name>` so a session that traverses multiple cwds keeps one line per cwd. When `--project` is absent, **do not write** the marker — hooks fall back to root naturally.
 
 ## Your Role
 
@@ -16,7 +39,7 @@ You are the main orchestrator for roadmap updates. Keep this thread lean — loa
 Verify project setup:
 
 ```bash
-test -f ai_files/user_pref.json && echo "✓ User preferences found" || echo "✗ Missing user_pref.json"
+test -f waves_files/user_pref.json && echo "✓ User preferences found" || echo "✗ Missing user_pref.json"
 ```
 
 If missing, ask user to run `project-init` first.
@@ -26,12 +49,12 @@ If missing, ask user to run `project-init` first.
 List available roadmap files in wave directories:
 
 ```bash
-ls -1 ai_files/waves/*/roadmap.json 2>/dev/null
+ls -1 waves_files/waves/*/roadmap.json 2>/dev/null
 ```
 
 If none found:
 ```
-⚠ No roadmaps found in ai_files/waves/
+⚠ No roadmaps found in waves_files/waves/
 
 To create a new roadmap, run: roadmap-create
 ```
@@ -39,7 +62,7 @@ Exit.
 
 If exactly one roadmap exists:
 ```
-✓ Using roadmap: Wave {wave_name} (ai_files/waves/{wave_name}/roadmap.json)
+✓ Using roadmap: Wave {wave_name} (waves_files/waves/{wave_name}/roadmap.json)
 ```
 
 If multiple exist, ask:
@@ -47,9 +70,9 @@ If multiple exist, ask:
 📋 Which roadmap would you like to update?
 
 Options:
-  1. Wave sub-zero (ai_files/waves/sub-zero/roadmap.json)
-  2. Wave 0 (ai_files/waves/w0/roadmap.json)
-  3. Wave 1 (ai_files/waves/w1/roadmap.json)
+  1. Wave sub-zero (waves_files/waves/sub-zero/roadmap.json)
+  2. Wave 0 (waves_files/waves/w0/roadmap.json)
+  3. Wave 1 (waves_files/waves/w1/roadmap.json)
   ...
 
 Choose a number or wave name:
@@ -458,7 +481,7 @@ To view detailed progress, run:
   or logbook-update (for existing logbooks)
 {/if}
 
-Roadmap file: ai_files/waves/{wave_name}/roadmap.json
+Roadmap file: waves_files/waves/{wave_name}/roadmap.json
 Last updated: {timestamp}
 ```
 

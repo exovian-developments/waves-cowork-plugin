@@ -1,0 +1,173 @@
+#!/bin/bash
+# waves-merge — kernel rail: git merge-driver for Waves JSON artifacts
+# (w6 Phase 13, the collaboration substrate).
+#
+# Git merge-driver contract: invoked as
+#   waves-merge %O %A %B %P
+# where %O = common ancestor, %A = ours (result is written HERE), %B = theirs,
+# %P = the path of the file in the repo. Exit 0 = merged cleanly (git never
+# writes <<<<<<< markers); non-zero = conflict (git falls back to its default
+# behavior for the file).
+#
+# Merge semantics (per-field, never per-file):
+#   - Field changed on one side only → that change wins (classic 3-way).
+#   - Different fields changed on each side → both changes land.
+#   - Arrays whose items carry an "id" → union by id:
+#       · item added on one side → included
+#       · same id on both sides, id existed in the ancestor → same logical
+#         entry edited by both → recurse per field
+#       · same id CREATED on both sides (not in ancestor) with different
+#         content → both survive: the OLDER side keeps the id, the NEWER
+#         side's entry is renumbered to max(id)+1 — zero loss, deterministic
+#   - Arrays WITHOUT per-item ids (plain strings, id-less objects) edited on
+#     both sides → 3-way SET-UNION: ancestor elements kept by both sides stay
+#     (ancestor order), then each side's additions (A's, then B's, deduped).
+#     Concurrent appends both land — additions are never silently lost; an
+#     element removed on either side is a deliberate deletion and stays out.
+#     Mid-array insert order is normalized to survivors-then-additions.
+#   - Real collision (same field, both changed, different values) →
+#     last-write-wins PER FIELD: the side whose last commit touching this
+#     file (git log -1 HEAD vs MERGE_HEAD -- <path>) is newer wins THAT field
+#     only. Per-FILE LWW is forbidden — it silently loses fields.
+#     Tie or no timestamp available → ours (deterministic).
+#   - Non-artifact guard: if any of the three inputs is not valid JSON, the
+#     file is not a Waves artifact → delegate to `git merge-file` (standard
+#     git behavior, visible markers — degradation is visible, never silent).
+#
+# Output is pretty-printed JSON (stable 2-space indent) so `git blame` keeps
+# attributing fields line-by-line — per-field attribution for free.
+
+set -uo pipefail
+
+if [ "${1:-}" = "--help" ]; then
+  grep '^# ' "$0" | head -40 | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+
+if [ $# -lt 3 ]; then
+  echo "usage: waves-merge <ancestor %O> <ours %A> <theirs %B> [<path %P>]" >&2
+  exit 1
+fi
+
+O="$1"; A="$2"; B="$3"; P="${4:-}"
+
+command -v jq &>/dev/null || { git merge-file "$A" "$O" "$B"; exit $?; }
+
+# --- Non-artifact guard: all three inputs must be valid JSON ---
+for f in "$O" "$A" "$B"; do
+  if ! jq -e . "$f" >/dev/null 2>&1; then
+    git merge-file "$A" "$O" "$B"
+    exit $?
+  fi
+done
+
+# --- LWW winner: the side whose last commit touching this file is newer ---
+# Inside a merge driver: HEAD = ours. Theirs is resolved from the GITHEAD_<sha>
+# env vars git exports to merge drivers (MERGE_HEAD is NOT yet written while
+# the driver runs — verified against merge-ort). File-level timestamps,
+# applied ONLY to fields in real collision. Missing data or tie → ours.
+WINNER="a"
+if [ -n "$P" ] && command -v git &>/dev/null; then
+  OURS_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+  THEIRS_REF=""
+  while IFS= read -r line; do
+    sha="${line#GITHEAD_}"; sha="${sha%%=*}"
+    [ -n "$sha" ] && [ "$sha" != "$OURS_SHA" ] && THEIRS_REF="$sha"
+  done < <(env | grep '^GITHEAD_' 2>/dev/null || true)
+  # Fallback for invocations outside a live driver (e.g. manual 3-way replay)
+  [ -z "$THEIRS_REF" ] && git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && THEIRS_REF="MERGE_HEAD"
+  if [ -n "$THEIRS_REF" ]; then
+    T_OURS=$(git log -1 --format=%ct HEAD -- "$P" 2>/dev/null || echo "")
+    T_THEIRS=$(git log -1 --format=%ct "$THEIRS_REF" -- "$P" 2>/dev/null || echo "")
+    if [ -n "$T_OURS" ] && [ -n "$T_THEIRS" ] && [ "$T_THEIRS" -gt "$T_OURS" ] 2>/dev/null; then
+      WINNER="b"
+    fi
+  fi
+fi
+
+# --- The 3-way per-field merge (jq) ---
+MERGED=$(jq -n \
+  --slurpfile o "$O" --slurpfile a "$A" --slurpfile b "$B" \
+  --arg winner "$WINNER" '
+# id-array detector: non-empty array whose every item is an object with "id"
+def aid($x): ($x|type)=="array" and ($x|length)>0
+  and ($x | all((type=="object") and has("id")));
+
+def m($o; $av; $bv):
+  # per-key object merge (deletions: a key removed on one side while unchanged
+  # on the other is a real deletion → omit; removed-vs-changed keeps the change)
+  def mobj:
+    ([($av|keys[]), ($bv|keys[])] | unique) as $ks |
+    reduce $ks[] as $k ({};
+      (if ($o|type)=="object" then ($o[$k] // null) else null end) as $ov |
+      if ($av|has($k)) and ($bv|has($k)) then
+        . + {($k): m($ov; $av[$k]; $bv[$k])}
+      elif ($av|has($k)) then
+        (if (($o|type)=="object") and ($o|has($k)) and ($o[$k] == $av[$k])
+         then . else . + {($k): $av[$k]} end)
+      else
+        (if (($o|type)=="object") and ($o|has($k)) and ($o[$k] == $bv[$k])
+         then . else . + {($k): $bv[$k]} end)
+      end);
+
+  # union-by-id array merge with deterministic renumbering of create-collisions
+  def marr:
+    (if ($o|type)=="array" then $o else [] end) as $oo |
+    def get($arr; $i): ($arr | map(select(.id == $i)) | .[0]);
+    ($oo | map(.id)) as $oids |
+    ($av | map(.id)) as $aids |
+    ($bv | map(.id)) as $bids |
+    # entries whose id existed in the ancestor: classic 3-way per entry
+    ($oids | map(. as $i |
+      get($oo; $i) as $oe | get($av; $i) as $ae | get($bv; $i) as $be |
+      if ($ae != null) and ($be != null) then [m($oe; $ae; $be)]
+      elif ($ae != null) then (if $ae == $oe then [] else [$ae] end)
+      elif ($be != null) then (if $be == $oe then [] else [$be] end)
+      else [] end
+    ) | add // []) as $kept |
+    (($aids - $oids)) as $anew |
+    (($bids - $oids)) as $bnew |
+    # ids created on BOTH sides (the collision class)
+    ($anew - ($anew - $bnew)) as $dup |
+    (($anew - $dup) | map(get($av; .))) as $aonly |
+    (($bnew - $dup) | map(get($bv; .))) as $bonly |
+    reduce $dup[] as $i ({res: ($kept + $aonly + $bonly), extra: []};
+      get($av; $i) as $ae | get($bv; $i) as $be |
+      if $ae == $be then .res += [$ae]
+      else
+        # both created the same id with different content: the OLDER side
+        # keeps the id; the NEWER side (the LWW winner) gets renumbered.
+        (if $winner == "a" then {old: $be, new: $ae}
+         else {old: $ae, new: $be} end) as $pair |
+        .res += [$pair.old] | .extra += [$pair.new]
+      end
+    ) |
+    ([.res[].id | select(type=="number")] | max // 0) as $mx |
+    .res + (.extra | to_entries | map(.value + {id: ($mx + .key + 1)}));
+
+  # 3-way set-union for arrays WITHOUT per-item ids: survivors kept by both
+  # sides (ancestor order) + A additions + B additions (deduped). Concurrent
+  # appends both land — never silent loss of an addition.
+  def msarr:
+    (if ($o|type)=="array" then $o else [] end) as $oo |
+    ($oo | map(select(. as $e | (($av | index($e)) != null) and (($bv | index($e)) != null)))) as $kept |
+    ($av | map(select(. as $e | ($oo | index($e)) == null))) as $aadd |
+    ($bv | map(select(. as $e | (($oo | index($e)) == null) and (($aadd | index($e)) == null)))) as $badd |
+    $kept + $aadd + $badd;
+
+  if   $av == $bv then $av
+  elif $av == $o  then $bv
+  elif $bv == $o  then $av
+  elif ($av|type)=="object" and ($bv|type)=="object" then mobj
+  elif ($av|type)=="array" and ($bv|type)=="array" then
+    (if aid($av) and aid($bv) then marr else msarr end)
+  else (if $winner == "a" then $av else $bv end)   # real collision → per-field LWW
+  end;
+
+m($o[0]; $a[0]; $b[0])
+' 2>/dev/null) || { git merge-file "$A" "$O" "$B"; exit $?; }
+
+[ -n "$MERGED" ] || { git merge-file "$A" "$O" "$B"; exit $?; }
+
+printf '%s\n' "$MERGED" > "$A"
+exit 0

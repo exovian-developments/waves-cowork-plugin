@@ -1,0 +1,265 @@
+#!/bin/bash
+# waves-gate-eval — kernel rail: graduated enforcement decision (extracted from
+# the plugin's waves-gate.sh PreToolUse hook, w6 Phase 13; logic preserved verbatim).
+#
+# Decides whether a tool action is allowed, blocked, or allowed-with-reminder,
+# from the artifact state of a Waves project. Self-contained: every input is an
+# explicit argument; no plugin layout, no stdin JSON, no telemetry (the calling
+# wrapper owns those).
+#
+# Usage:
+#   waves-gate-eval --tool <Edit|Write|Bash|...> [--file <path>] [--command <cmd>]
+#                   --artifacts-root <dir> --artifacts-scoped <dir>
+#                   --markers <dir> --project-dir <dir>
+#
+# Logic (unchanged from the original hook):
+#   No blueprint → allow everything (project in shaping phase)
+#   Blueprint exists → enforcement activates:
+#     No roadmap → BLOCK (except artifact writes and read-only Bash)
+#     No logbook → BLOCK (except artifact writes and read-only Bash)
+#     All artifacts present → ALLOW + decision classification reminder
+#   metacognition-pending marker → BLOCK until delegation (artifact writes and
+#   read-only Bash whitelisted; artifact write clears the marker + sets cooldown)
+#
+# Exit codes (hook contract preserved): 0 = allow (stdout JSON {} or
+# {additionalContext}), 2 = block (reason on stderr), 1 = internal error.
+
+set -euo pipefail
+
+TOOL_NAME="" FILE_PATH="" COMMAND="" AI_FILES_ROOT="" AI_FILES_SCOPED="" MARKERS="" PROJECT_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --tool) TOOL_NAME="${2:-}"; shift 2 ;;
+    --file) FILE_PATH="${2:-}"; shift 2 ;;
+    --command) COMMAND="${2:-}"; shift 2 ;;
+    --artifacts-root) AI_FILES_ROOT="${2:-}"; shift 2 ;;
+    --artifacts-scoped) AI_FILES_SCOPED="${2:-}"; shift 2 ;;
+    --markers) MARKERS="${2:-}"; shift 2 ;;
+    --project-dir) PROJECT_DIR="${2:-}"; shift 2 ;;
+    --help)
+      grep '^# ' "$0" | head -28 | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) echo "waves-gate-eval: unknown argument $1" >&2; exit 1 ;;
+  esac
+done
+
+[ -n "$AI_FILES_ROOT" ] || { echo "waves-gate-eval: --artifacts-root is required" >&2; exit 1; }
+AI_FILES_SCOPED="${AI_FILES_SCOPED:-$AI_FILES_ROOT}"
+PROJECT_DIR="${PROJECT_DIR:-.}"
+
+command -v jq &>/dev/null || { echo '{}'; exit 0; }
+
+# If no artifacts directory, allow everything
+if [ ! -d "$AI_FILES_ROOT" ]; then
+  echo '{}'
+  exit 0
+fi
+if [ -n "$MARKERS" ]; then
+  mkdir -p "$MARKERS" 2>/dev/null
+  PENDING_FILE="$MARKERS/metacognition-pending"
+  COOLDOWN_FILE="$MARKERS/metacognition-cooldown"
+else
+  PENDING_FILE=""
+  COOLDOWN_FILE=""
+fi
+
+# --- Framework self-operations: the kernel's own bins are always allowed ---
+# (field report 2026-06-10: the gate blocked waves-validate during legitimate
+# framework work). A bash invocation that references kernel/bin/waves- is the
+# framework operating on itself, in ANY gate mode.
+if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
+  if printf '%s' "$COMMAND" | head -1 | grep -q 'kernel/bin/waves-'; then
+    echo '{}'
+    exit 0
+  fi
+fi
+
+# --- Metacognition pending: block until delegation is complete ---
+# Auto-expire after 5 minutes to prevent stuck markers.
+if [ -n "$PENDING_FILE" ] && [ -f "$PENDING_FILE" ]; then
+  if [ "$(uname)" = "Darwin" ]; then
+    MARKER_AGE=$(( $(date +%s) - $(stat -f %m "$PENDING_FILE") ))
+  else
+    MARKER_AGE=$(( $(date +%s) - $(stat -c %Y "$PENDING_FILE") ))
+  fi
+  if [ "$MARKER_AGE" -gt 300 ]; then
+    rm -f "$PENDING_FILE"
+  fi
+fi
+if [ -n "$PENDING_FILE" ] && [ -f "$PENDING_FILE" ]; then
+  # Allow artifact writes AND clear the marker (delegation assumed complete)
+  if [ "$TOOL_NAME" = "Edit" ] || [ "$TOOL_NAME" = "Write" ]; then
+    if [[ "$FILE_PATH" == */waves_files/* ]] || [[ "$FILE_PATH" == waves_files/* ]] || \
+       [[ "$FILE_PATH" == */ai_files/* ]] || [[ "$FILE_PATH" == ai_files/* ]]; then
+      rm -f "$PENDING_FILE" 2>/dev/null
+      # Write cooldown to prevent the metacognition hook from re-creating the marker
+      [ -n "$COOLDOWN_FILE" ] && touch "$COOLDOWN_FILE" 2>/dev/null
+      echo '{}'
+      exit 0
+    fi
+  fi
+  # Allow read-only Bash + marker cleanup
+  if [ "$TOOL_NAME" = "Bash" ]; then
+    FIRST_CHECK=$(echo "$COMMAND" | head -1 | sed 's/^[[:space:]]*//' | cut -d' ' -f1)
+    case "$FIRST_CHECK" in
+      ls|cat|head|tail|grep|rg|find|tree|git|wc|echo|pwd|jq|diff)
+        echo '{}'
+        exit 0
+        ;;
+      rm)
+        # Allow clearing stuck markers (session marker dir)
+        if echo "$COMMAND" | grep -qE 'markers/|waves-' 2>/dev/null; then
+          echo '{}'
+          exit 0
+        fi
+        ;;
+    esac
+  fi
+  echo "Waves: Metacognition pending. Delegate analysis to a background subagent (Agent tool with run_in_background=true), then record 'metacognition: delegated' in the logbook — or in the roadmap when no logbook exists yet (w0/planning). Any artifacts-directory write clears the gate." >&2
+  exit 2
+fi
+
+# --- Consent bypass: .claude/waves-gate-bypass disables blocking ---
+if [ -f "$PROJECT_DIR/.claude/waves-gate-bypass" ]; then
+  echo '{}'
+  exit 0
+fi
+
+# --- Whitelist: framework and config files are never blocked ---
+if [ "$TOOL_NAME" = "Edit" ] || [ "$TOOL_NAME" = "Write" ]; then
+  BASENAME=$(basename "$FILE_PATH" 2>/dev/null)
+
+  # waves_files/ (canonical) or ai_files/ (pre-v3.1 fallback) — Waves artifacts
+  if [[ "$FILE_PATH" == */waves_files/* ]] || [[ "$FILE_PATH" == waves_files/* ]] || \
+     [[ "$FILE_PATH" == */ai_files/* ]] || [[ "$FILE_PATH" == ai_files/* ]]; then
+    echo '{}'
+    exit 0
+  fi
+
+  # .claude/ — Claude configuration (settings, commands, hooks)
+  if [[ "$FILE_PATH" == */.claude/* ]] || [[ "$FILE_PATH" == .claude/* ]]; then
+    echo '{}'
+    exit 0
+  fi
+
+  # CLAUDE.md — Agent Operating Protocol
+  if [[ "$BASENAME" == "CLAUDE.md" ]] || [[ "$BASENAME" == "claude.md" ]]; then
+    echo '{}'
+    exit 0
+  fi
+
+  # Root-level documentation and config files
+  if [[ "$BASENAME" == *.md ]] && [[ "$FILE_PATH" != */* || "$FILE_PATH" == ./* ]]; then
+    echo '{}'
+    exit 0
+  fi
+  case "$BASENAME" in
+    .gitignore|.gitattributes|package.json|package-lock.json|pubspec.yaml|pubspec.lock|tsconfig.json|Makefile|Dockerfile|docker-compose.yml|.env.example)
+      echo '{}'
+      exit 0
+      ;;
+  esac
+fi
+
+# --- Whitelist: read-only Bash commands are always allowed ---
+if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
+  # Extract the first word/command from the Bash command (first line only — heredocs have newlines)
+  FIRST_LINE=$(echo "$COMMAND" | head -1)
+  FIRST_CMD=$(echo "$FIRST_LINE" | sed 's/^[[:space:]]*//' | cut -d' ' -f1 | cut -d'/' -f1)
+
+  # Read-only commands that never modify state
+  case "$FIRST_CMD" in
+    git)
+      # Allow read-only git subcommands + essential git workflow
+      GIT_SUB=$(echo "$FIRST_LINE" | sed 's/^[[:space:]]*git[[:space:]]*//' | cut -d' ' -f1)
+      case "$GIT_SUB" in
+        status|log|diff|show|branch|remote|tag|ls-files|blame|shortlog|describe|rev-parse|config|stash)
+          echo '{}'
+          exit 0
+          ;;
+        init|add|commit|push|pull|fetch|merge|rebase|checkout|switch|restore|cherry-pick|mv)
+          # Git workflow commands — always allowed. The gate protects code CREATION,
+          # not version control operations on already-written code.
+          echo '{}'
+          exit 0
+          ;;
+      esac
+      ;;
+    ls|tree|cat|head|tail|grep|rg|find|wc|file|which|echo|printf|type|pwd|date|whoami|env|printenv|jq|diff)
+      echo '{}'
+      exit 0
+      ;;
+    dart|flutter)
+      # dart analyze, flutter analyze — read-only analysis
+      if echo "$COMMAND" | grep -qE 'analyze|--version|pub\s+deps'; then
+        echo '{}'
+        exit 0
+      fi
+      ;;
+    brew|node|python|python3|ruby|java|go|rustc|cargo)
+      # Version checks and package info
+      if echo "$COMMAND" | grep -qE '\-\-version|\-v$|--help|list|info|which'; then
+        echo '{}'
+        exit 0
+      fi
+      ;;
+    curl)
+      # curl for downloading (used by Homebrew SHA checks etc.)
+      echo '{}'
+      exit 0
+      ;;
+    shasum|md5|sha256sum)
+      # Hash verification
+      echo '{}'
+      exit 0
+      ;;
+  esac
+fi
+
+# --- Check Blueprint (the inflection point) ---
+BLUEPRINT_EXISTS=false
+
+if [ -f "$AI_FILES_ROOT/blueprint.json" ] || [ -f "$AI_FILES_ROOT/product_blueprint.json" ]; then
+  BLUEPRINT_EXISTS=true
+fi
+
+# No blueprint = project in shaping phase → allow everything silently
+if [ "$BLUEPRINT_EXISTS" = false ]; then
+  echo '{}'
+  exit 0
+fi
+
+# --- Blueprint exists: Waves enforcement activates ---
+
+# Check for at least one roadmap
+ROADMAP_EXISTS=false
+for roadmap in "$AI_FILES_SCOPED"/waves/*/roadmap.json; do
+  if [ -f "$roadmap" ]; then
+    ROADMAP_EXISTS=true
+    break
+  fi
+done
+
+if [ "$ROADMAP_EXISTS" = false ]; then
+  echo "Waves: This project has a blueprint but no roadmap. Create one before implementing: /waves:roadmap-create" >&2
+  exit 2
+fi
+
+# Check for at least one logbook
+LOGBOOK_EXISTS=false
+for logbook in "$AI_FILES_SCOPED"/waves/*/logbooks/*.json; do
+  if [ -f "$logbook" ]; then
+    LOGBOOK_EXISTS=true
+    break
+  fi
+done
+
+if [ "$LOGBOOK_EXISTS" = false ]; then
+  echo "Waves: This project has a blueprint and roadmap but no logbook. Create one: /waves:logbook-create — To bypass: touch .claude/waves-gate-bypass" >&2
+  exit 2
+fi
+
+# --- All artifacts present: allow + inject classification reminder ---
+REMINDER="CLASSIFY your decision before acting:\n- Level 1-2 (technical implementation) → Proceed. Document in logbook.\n- Level 3 (outside objective scope) → STOP. Inform user.\n- Level 4 (affects blueprint capability) → STOP. Project scenarios.\n- Level 5 (discovery with independent value) → STOP. Document. Advise."
+
+jq -n --arg ctx "$REMINDER" '{"additionalContext": $ctx}'

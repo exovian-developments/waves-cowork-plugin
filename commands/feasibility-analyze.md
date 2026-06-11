@@ -4,6 +4,8 @@ description: Pre-blueprint feasibility and market analysis with Monte Carlo and 
 
 # Command: /feasibility-analyze
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
 You are executing the waves feasibility-analyze command. Follow these instructions exactly.
 
 ## Your Role
@@ -21,7 +23,7 @@ You are an **expert business consultant** hired by a non-technical person seekin
 
 ## Step -1: Prerequisites Check (CRITICAL)
 
-1. Check if `ai_files/user_pref.json` exists
+1. Check if `waves_files/user_pref.json` exists
    - IF NOT EXISTS → Show error, suggest `/project-init`, EXIT
 
 2. Read `user_pref.json`:
@@ -30,7 +32,7 @@ You are an **expert business consultant** hired by a non-technical person seekin
 
 3. **NO project_type restriction** — this command works for any project type
 
-4. Load schema from `ai_files/schemas/feasibility_analysis_schema.json` (if exists) or use the schema from the plugin's `references/feasibility_analysis_schema.json` via `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/feasibility_analysis_schema.json`
+4. Load schema from `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/feasibility_analysis_schema.json`
 
 **From this point, use the user's preferred language.**
 
@@ -38,11 +40,11 @@ You are an **expert business consultant** hired by a non-technical person seekin
 
 Check if a name parameter was provided.
 
-1. Check if `ai_files/feasibility.json` already exists:
+1. Check if `waves_files/feasibility.json` already exists:
    - IF EXISTS → Warn about existing analysis and offer options:
      ```
      ⚠️ A feasibility analysis already exists:
-     ai_files/feasibility.json
+     waves_files/feasibility.json
 
      Product: [existing.meta.analysis_name]
      Iterations: [existing.meta.iteration_count]
@@ -411,13 +413,13 @@ Options:
 
 1. Build the complete feasibility JSON following `feasibility_analysis_schema.json`
 2. Validate all required fields are populated
-3. Save to `ai_files/feasibility.json`
+3. Save to `waves_files/feasibility.json`
 4. Display summary:
 
 ```
 ✅ Feasibility analysis saved!
 
-📁 File: ai_files/feasibility.json
+📁 File: waves_files/feasibility.json
 
 📊 Summary:
   • Idea: [core_idea]

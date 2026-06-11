@@ -1,0 +1,132 @@
+#!/bin/bash
+# waves-pre-commit — kernel rail: commit-boundary backstop for Waves artifacts
+# (w6 Phase 13). Catches raw artifact edits from ANY editing surface (a human
+# in an editor, a script, an agent outside Claude Code) that the runtime hooks
+# never see.
+#
+# What it does on each commit:
+#   1. Lists STAGED files under waves_files/ or ai_files/ matching *.json.
+#   2. Every staged artifact must be well-formed JSON — malformed blocks.
+#   3. Artifacts with a known schema (roadmap/logbook/blueprint) are validated
+#      with waves-validate using DELTA semantics: the commit is blocked only if
+#      the staged version introduces NEW schema errors compared to the HEAD
+#      version of the same file. Pre-existing (legacy) errors are reported as
+#      warnings and do NOT block — historical artifacts are immutable by
+#      convention, and a backstop that blocks on day-1 legacy content is a
+#      backstop that gets disabled in week 1.
+#
+# Usage (wired by waves-pre-commit-install as the repo's pre-commit hook):
+#   waves-pre-commit --schemas <dir> [--repo <dir>]
+#     --schemas: directory holding the artifact JSON schemas (each product
+#                points at its own bundled copy — the kernel assumes no layout)
+#
+# Exit codes: 0 = commit may proceed, 2 = blocked (reasons on stderr),
+# 1 = usage/internal error. Bypass: git commit --no-verify (git standard).
+
+set -uo pipefail
+
+SCHEMAS="" REPO="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --schemas) SCHEMAS="${2:-}"; shift 2 ;;
+    --repo) REPO="${2:-.}"; shift 2 ;;
+    --help)
+      grep '^# ' "$0" | head -24 | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) echo "waves-pre-commit: unknown argument $1" >&2; exit 1 ;;
+  esac
+done
+
+command -v jq &>/dev/null || exit 0   # no jq → cannot check; never block blind
+git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+VALIDATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/waves-validate"
+
+# --- Staged Waves artifacts only ---
+STAGED=$(git -C "$REPO" diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+         grep -E '(^|/)(waves_files|ai_files)/.*\.json$' || true)
+[ -z "$STAGED" ] && exit 0
+
+# resolve_schema <path> → schema filename or "" (well-formedness only)
+resolve_schema() {
+  local p="$1" type=""
+  case "$p" in
+    */roadmap.json) echo "logbook_roadmap_schema.json" ;;
+    */logbooks/*/logbook.json|*/logbooks/*.json)
+      # Directory-per-logbook sidecars (logbooks/<slug>/anything-else.json:
+      # audits, matrices, correctness reports) are NOT logbooks — they get
+      # well-formedness only. Match them out before the logbook patterns.
+      case "$p" in
+        */logbooks/*/logbook.json) : ;;          # directory layout — IS the logbook
+        */logbooks/*/*.json) echo ""; return ;;  # sidecar — no schema
+      esac
+      # project type decides software vs general logbook shape
+      for rules in "$REPO/waves_files/project_rules.json" "$REPO/ai_files/project_rules.json"; do
+        [ -f "$rules" ] && type=$(jq -r '.type // empty' "$rules" 2>/dev/null) && break
+      done
+      if [ "$type" = "general" ]; then echo "logbook_general_schema.json"; else echo "logbook_software_schema.json"; fi
+      ;;
+    */blueprint.json|*/product_blueprint.json) echo "product_blueprint_schema.json" ;;
+    *) echo "" ;;
+  esac
+}
+
+# validation_errors <json-file> <schema-file> → error lines on stdout (empty = valid)
+validation_errors() {
+  bash "$VALIDATE" "$1" --schema "$2" 2>&1 >/dev/null | grep -v '^waves-validate: WARNING' || true
+}
+
+BLOCKED=0
+TMP=$(mktemp -d /tmp/waves-precommit.XXXXXX)
+trap 'rm -rf "$TMP"' EXIT
+
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+
+  # Staged (index) content
+  if ! git -C "$REPO" show ":$f" > "$TMP/staged.json" 2>/dev/null; then
+    continue
+  fi
+
+  # 1. Well-formedness — malformed JSON always blocks
+  if ! jq -e . "$TMP/staged.json" >/dev/null 2>&1; then
+    echo "waves-pre-commit BLOCKED: $f — staged content is not valid JSON" >&2
+    BLOCKED=1
+    continue
+  fi
+
+  # 2. Schema validation with delta semantics
+  SCHEMA_NAME=$(resolve_schema "$f")
+  [ -z "$SCHEMA_NAME" ] && continue
+  [ -n "$SCHEMAS" ] && [ -f "$SCHEMAS/$SCHEMA_NAME" ] || continue
+
+  STAGED_ERRS=$(validation_errors "$TMP/staged.json" "$SCHEMAS/$SCHEMA_NAME")
+  [ -z "$STAGED_ERRS" ] && continue
+
+  # Staged has errors — compare against HEAD version of the same file.
+  # Rename-aware baseline: during the waves_files migration commit the staged
+  # path is waves_files/… while HEAD still has ai_files/… — without this
+  # fallback every legacy error would look NEW and block the migration itself.
+  HEAD_ERRS=""
+  if git -C "$REPO" show "HEAD:$f" > "$TMP/head.json" 2>/dev/null; then
+    HEAD_ERRS=$(validation_errors "$TMP/head.json" "$SCHEMAS/$SCHEMA_NAME")
+  else
+    OLD_PATH="${f/waves_files\//ai_files\/}"
+    if [ "$OLD_PATH" != "$f" ] && git -C "$REPO" show "HEAD:$OLD_PATH" > "$TMP/head.json" 2>/dev/null; then
+      HEAD_ERRS=$(validation_errors "$TMP/head.json" "$SCHEMAS/$SCHEMA_NAME")
+    fi
+  fi
+
+  NEW_ERRS=$(comm -13 <(printf '%s\n' "$HEAD_ERRS" | sort) <(printf '%s\n' "$STAGED_ERRS" | sort) | grep -v '^$' || true)
+
+  if [ -n "$NEW_ERRS" ]; then
+    echo "waves-pre-commit BLOCKED: $f introduces NEW schema errors (vs HEAD):" >&2
+    printf '%s\n' "$NEW_ERRS" | sed 's/^/  - /' >&2
+    BLOCKED=1
+  else
+    echo "waves-pre-commit warning: $f carries pre-existing schema errors (legacy, not introduced by this commit — not blocking)" >&2
+  fi
+done <<< "$STAGED"
+
+[ "$BLOCKED" -eq 1 ] && exit 2
+exit 0

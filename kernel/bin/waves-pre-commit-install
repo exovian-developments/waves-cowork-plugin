@@ -1,0 +1,71 @@
+#!/bin/bash
+# waves-pre-commit-install — kernel rail: wire the commit-boundary backstop
+# into a repo's .git/hooks/pre-commit (w6 Phase 13). Idempotent, and it NEVER
+# clobbers a foreign pre-commit: an existing hook is preserved and chained
+# (moved to pre-commit.pre-waves and executed FIRST; if it fails, the commit
+# fails — both gates apply).
+#
+# Usage:
+#   waves-pre-commit-install --schemas <dir> [--repo <dir>]
+#     --schemas: schema directory handed through to waves-pre-commit
+#
+# Exit codes: 0 = installed (or already installed), 1 = error.
+
+set -euo pipefail
+
+SCHEMAS="" REPO="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --schemas) SCHEMAS="${2:-}"; shift 2 ;;
+    --repo) REPO="${2:-.}"; shift 2 ;;
+    --help)
+      grep '^# ' "$0" | head -12 | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) echo "waves-pre-commit-install: unknown argument $1" >&2; exit 1 ;;
+  esac
+done
+
+[ -n "$SCHEMAS" ] || { echo "waves-pre-commit-install: --schemas is required" >&2; exit 1; }
+git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "waves-pre-commit-install: $REPO is not a git repository" >&2
+  exit 1
+}
+# Hooks location via --git-path hooks — NOT --git-dir: in a linked worktree the
+# per-worktree git dir holds no hooks (git executes them from the common dir),
+# so a hook written there is silently inert. --git-path also honors a custom
+# core.hooksPath. The result may be relative to $REPO — absolutize it.
+HOOKS_DIR=$(git -C "$REPO" rev-parse --git-path hooks 2>/dev/null)
+case "$HOOKS_DIR" in
+  /*) ;;
+  *)  HOOKS_DIR="$(cd "$REPO" && pwd)/$HOOKS_DIR" ;;
+esac
+mkdir -p "$HOOKS_DIR"
+
+KERNEL_BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/waves-pre-commit"
+[ -f "$KERNEL_BIN" ] || { echo "waves-pre-commit-install: waves-pre-commit not found next to this tool" >&2; exit 1; }
+
+HOOK="$HOOKS_DIR/pre-commit"
+MARKER="# waves-pre-commit backstop"
+
+# Already installed (idempotent) — refresh the call line only
+if [ -f "$HOOK" ] && grep -qF "$MARKER" "$HOOK" 2>/dev/null; then
+  echo "waves-pre-commit-install: already installed at $HOOK"
+  exit 0
+fi
+
+# Foreign hook present → preserve and chain
+CHAIN_LINE=""
+if [ -f "$HOOK" ]; then
+  mv "$HOOK" "$HOOKS_DIR/pre-commit.pre-waves"
+  chmod +x "$HOOKS_DIR/pre-commit.pre-waves" 2>/dev/null || true
+  CHAIN_LINE="\"\$(dirname \"\$0\")/pre-commit.pre-waves\" \"\$@\" || exit \$?"
+fi
+
+cat > "$HOOK" <<EOF
+#!/bin/bash
+$MARKER — installed by waves-pre-commit-install (kernel). Bypass: git commit --no-verify
+${CHAIN_LINE:-# (no pre-existing hook was found at install time)}
+exec bash "$KERNEL_BIN" --schemas "$SCHEMAS" --repo "\$(git rev-parse --show-toplevel)"
+EOF
+chmod +x "$HOOK"
+echo "waves-pre-commit-install: installed at $HOOK${CHAIN_LINE:+ (pre-existing hook preserved as pre-commit.pre-waves, runs first)}"

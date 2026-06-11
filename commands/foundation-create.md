@@ -4,6 +4,8 @@ description: Compact feasibility analysis into validated facts for blueprint cre
 
 # Command: /foundation-create
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
 You are executing the waves foundation creation command. Follow these instructions exactly.
 
 ## Your Role
@@ -14,7 +16,7 @@ You are the compaction engine. You read a completed feasibility analysis and dis
 
 ## Step -1: Prerequisites Check (CRITICAL)
 
-Check if `ai_files/user_pref.json` exists.
+Check if `waves_files/user_pref.json` exists.
 - If found: Extract `preferred_language` for all interactions
 - If not found: EXIT with message: "user_pref.json not found. Please run /project-init first."
 
@@ -22,13 +24,13 @@ Check if `ai_files/user_pref.json` exists.
 
 ## Step 0: Locate Feasibility Analysis
 
-1. Check if `ai_files/feasibility.json` exists
+1. Check if `waves_files/feasibility.json` exists
 2. IF NOT EXISTS → EXIT: "No feasibility analysis found. Run /feasibility-analyze first."
-3. IF EXISTS → Read `ai_files/feasibility.json` completely into memory
+3. IF EXISTS → Read `waves_files/feasibility.json` completely into memory
 4. Extract product name from `meta.analysis_name` (or use parameter if provided)
 
 **Check for existing foundation:**
-- If `ai_files/foundation.json` exists:
+- If `waves_files/foundation.json` exists:
   - Show existing product name and source feasibility
   - Ask: "Overwrite? (Yes / No)"
   - If No → EXIT
@@ -144,6 +146,50 @@ This is the most important transformation in the foundation. Feasibility classif
 **Present as a table grouped by classification.** Ask: "Agree with classification? (Yes / Reclassify one / Add / Remove)"
 Iterate until confirmed.
 
+## Step 7.5: Adversarial Verification of the Re-classification (A→B, blocking)
+
+The re-classification in Step 7 is the foundation's highest-blast-radius transformation: every essential capability becomes a blueprint capability, and the blueprint is the source of truth for everything downstream. Yet the main agent that just performed it is the worst judge of its own coherence — it is anchored on the choices it made. This step extends design_principle #7 (every analyst A is followed by an independent verifier B) to this foundational write path: the agent authored the re-classification; the adversarial check is **delegated to fresh subagents to remove author bias**. This is the in-command twin of the `waves-foundational-audit.sh` hook (which covers the blueprint/roadmap write paths). The verifier **classifies, it does not veto** — the human/main agent decides with both outputs (project_rule #1).
+
+### Step 7.5.1: Spawn analyst A (fresh, minimal context, blocking)
+
+Spawn an Agent with `run_in_background=false` using the model from `agent_config.metacognition_model` in user_pref.json (default: `opus`). Do NOT pass the main agent's accumulated context. Pass only: the re-classified capabilities table from Step 7 (id, content, classification, feasibility_source, build_effort_days, revenue_streams) and the path to `waves_files/feasibility.json`.
+
+```
+You are a re-classification auditor with MINIMAL context by design. Another agent re-classified a product's capabilities from the feasibility's revenue axis (revenue_blocking / revenue_enabling / usage_expansion) to the foundation's operational axis (essential / important / desired). Your job is to verify each re-classification is SUPPORTED by the feasibility evidence — NOT to confirm the author's choices.
+
+Re-classified capabilities:
+<the Step 7 table>
+
+Read waves_files/feasibility.json. For EACH capability, apply the re-classification rules and judge against the evidence:
+- revenue_blocking -> essential ONLY if "without this the product cannot EXIST"; if the product still works (revenue loss only) it should be important. Flag a revenue_blocking capability demoted to desired.
+- revenue_enabling -> essential only if the product BREAKS without it; else important.
+- usage_expansion -> important only if it significantly strengthens an essential capability; else desired. Flag a usage_expansion promoted straight to essential.
+- Cross-check build_effort_days, the revenue_streams that depend on it, and the bayesian/monte-carlo signals: does the evidence actually support the operational criticality assigned?
+
+Classify EACH capability's re-classification as: supported (evidence backs it) / unsupported (evidence contradicts it or is silent) / overstated (real but the criticality was inflated). Cite the exact feasibility field for every judgment. Do NOT drop any capability. Output a compact list: CAP-id -> assigned class -> verdict -> one-line reason citing the feasibility field. Under 350 words.
+```
+
+### Step 7.5.2: Persist A, then spawn verifier B (fresh, blocking)
+
+Persist A's raw output to the logbook directory or `waves_files/` (timestamped) so it survives interruption. Then spawn a second fresh Agent (`run_in_background=false`, same model), pasting A's full output:
+
+```
+You are an independent, skeptical verifier with MINIMAL context by design. Auditor A judged the re-classifications below. Verify and classify each of A's verdicts — NOT expand, NOT filter.
+
+A's verdicts:
+<<< PASTE A's FULL OUTPUT HERE >>>
+
+Apply TWO lenses to each verdict:
+1) TECHNICAL — Read waves_files/feasibility.json and confirm or refute A's cited evidence. Does the feasibility field A names actually say what A claims? Cite field:value.
+2) VALUE — is A's verdict a real coherence problem or pedantry? Apply KISS/YAGNI. A founder's deliberate bet to treat a capability as essential, backed by a stated strategic reason, is not "unsupported" merely because the monte-carlo is silent.
+
+Classify EACH as: confirmed (A's verdict holds) / smoke (A is wrong or pedantic) / unverifiable (insufficient evidence — say so) / gold (confirmed AND high-impact: a mis-classification that would distort the whole blueprint). Output: CAP-id -> A's verdict -> your class -> one-line reason citing the feasibility field. Under 300 words.
+```
+
+### Step 7.5.3: Present both, correct, continue
+
+Present BOTH A's verdicts and B's classification to the user. Then, as the main agent, **correct the re-classifications that B confirmed as unsupported/overstated** before proceeding — re-run Step 7 for those capabilities only. The subagents never edit the foundation (project_rule #5); only you (the main agent) do, after seeing both lenses. `smoke` → discard; `unverifiable` → your judgment; `confirmed`/`gold` → fix before Step 8. Record the verification outcome in the foundation's traceability notes.
+
 ## Step 8: Expand Essential Flows
 
 From `essential_capabilities_draft.essential_flows_draft[]`:
@@ -218,7 +264,7 @@ For each unknown, assess:
 
 ## Step 12: Generate & Save Foundation JSON
 
-1. Read schema from `ai_files/schemas/product_foundation_schema.json` or from plugin references
+1. Read schema from `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/product_foundation_schema.json`
 2. Build complete foundation JSON with ALL sections from Steps 1-11
 3. Set `meta`:
    - `product_name`: from Step 0
@@ -229,14 +275,14 @@ For each unknown, assess:
    - `feasibility_confidence`: from feasibility
    - `feasibility_iteration_count`: from feasibility.meta.iteration_count
 4. Validate against schema
-5. Write to `ai_files/foundation.json`
+5. Write to `waves_files/foundation.json`
 
 ## Step 13: Summary
 
 ```
 ✅ Product Foundation created!
 
-📁 File: ai_files/foundation.json
+📁 File: waves_files/foundation.json
 
 📊 Summary:
 • Product: [name]

@@ -4,7 +4,29 @@ description: Extract coding rules/standards from the project codebase (software)
 
 # Command: /waves:rules-create
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
 You are executing the waves rules creation command. Follow these instructions exactly.
+
+## Multi-project scope
+
+Apply the **Multi-project Path Resolution** helper from `plugin/skills/waves-protocol/SKILL.md` before any other step:
+
+- Parse `--project <name>` from the command arguments.
+- If present: set `base_path = projects/<name>/waves_files/` and validate that projects/<name>/ exists (abort with a "scope not found" error if it does not).
+- If absent: set `base_path = waves_files/` (backwards-compatible default — identical to pre-3.x single-project behavior).
+
+Use `base_path` for every `waves_files/...` reference in the steps below. When the steps say `waves_files/<artifact>` they mean `<base_path><artifact>` in multi-project mode.
+
+When `--project` is present, also write the **session marker** via bash BEFORE any artifact operation — this is what makes the active scope visible to hooks (`plugin/hooks/_lib/scope-resolve.sh`) when they fire on subsequent Edit/Write:
+
+```bash
+mkdir -p "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}"
+printf '%s=%s\n' "$(printf '%s' "$PWD" | { md5 -q 2>/dev/null || md5sum | awk '{print $1}'; })" "<scope_name>" \
+  > "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}/active-scope"
+```
+
+Idempotent (overwrite-safe). The marker maps `<cwd_md5>=<scope_name>` so a session that traverses multiple cwds keeps one line per cwd. When `--project` is absent, **do not write** the marker — hooks fall back to root naturally.
 
 ## Your Role
 
@@ -12,20 +34,20 @@ You are the main orchestrator for project rules/standards creation. For software
 
 ## Step -1: Prerequisites Check (CRITICAL)
 
-1. Check if `ai_files/user_pref.json` exists.
+1. Check if `waves_files/user_pref.json` exists.
    - IF NOT EXISTS → Display: "⚠️ Missing configuration! Run /waves:project-init first." → EXIT COMMAND
 
-2. Read `ai_files/user_pref.json`:
+2. Read `waves_files/user_pref.json`:
    - Extract `user_profile.preferred_language` → Use for all interactions
    - Extract `project_context.project_type` → Determines main flow
 
 3. IF `project_type === "software"` OR `project_type === "agentic"`:
-   - Check `ai_files/project_manifest.json` exists
+   - Check `waves_files/project_manifest.json` exists
    - IF NOT EXISTS → Display: "⚠️ Run /waves:manifest-create first." → EXIT COMMAND
 
 4. Check if rules file already exists:
-   - Software / Agentic → `ai_files/project_rules.json`
-   - General → `ai_files/project_standards.json`
+   - Software / Agentic → `waves_files/project_rules.json`
+   - General → `waves_files/project_standards.json`
    - IF EXISTS → Ask: "Rules already exist. Overwrite / Merge / Cancel?"
 
 **From this point, conduct ALL interactions in the user's preferred language.**
@@ -61,7 +83,7 @@ IF No → Exit.
 
 ### Step A1: Read Project Manifest
 
-1. Read `ai_files/project_manifest.json`
+1. Read `waves_files/project_manifest.json`
 2. Extract: `primary_language`, `framework`, `architecture_patterns_by_layer`, `modules`, `features`
 3. Show project context summary and ask which layer to analyze:
 
@@ -126,6 +148,16 @@ Each pattern/convention must meet ALL criteria from the schema:
 - Context-independent
 - YAGNI compliant
 
+### Step A3.5: Formulate invariant rules from the usage side
+
+When a rule encodes an **invariant** (something that must always hold — "always call `toIdle()` on error", "always trim pasted input", "always acquire the lock before touching the cache"), **formulate it from the side where it is most likely to be violated — usually the usage / call site, not the declaration.**
+
+A declaration-side rule ("the `toIdle()` helper resets state") is easy to satisfy and easy to forget: a new call site that never calls it is invisible to the rule. A usage-side rule ("every handler that exits an error path MUST call `toIdle()` before returning") names exactly the obligation a new handler must meet, so the next implementer — and the cross-consistency reviewer — can check it directly.
+
+Why this matters (real incident): Diamond rules #9/#13 were written declaration-side and silently missed two new handlers that omitted the invariant, causing runtime bugs (see blueprint product_decision #20). Prefer the formulation that a NEW, unrelated piece of code would trip over.
+
+Apply this when validating each invariant rule's description before presenting it.
+
 ### Step A4: Present Findings
 
 Display in user's language:
@@ -153,9 +185,9 @@ Options:
 
 ### Step A5: Generate Rules File
 
-Read `ai_files/schemas/project_rules_schema.json` for structure reference.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/project_rules_schema.json` for structure reference.
 
-Generate `ai_files/project_rules.json` with:
+Generate `waves_files/project_rules.json` with:
 - Project info from manifest
 - Validated rules organized by section
 - IDs starting at 1, incrementing
@@ -170,7 +202,7 @@ Validate the generated file against the schema.
 ```
 ✅ Project rules created!
 
-📁 File: ai_files/project_rules.json
+📁 File: waves_files/project_rules.json
 📊 Rules generated: [count]
 
 By section:
@@ -225,14 +257,14 @@ If user wants changes → iterate.
 
 ### Step B4: Generate Standards File
 
-Generate `ai_files/project_standards.json` with structured standards.
+Generate `waves_files/project_standards.json` with structured standards.
 
 ### Step B5: Success Message
 
 ```
 ✅ Project standards created!
 
-📁 File: ai_files/project_standards.json
+📁 File: waves_files/project_standards.json
 📊 Categories defined: [count]
 
 [List categories]
@@ -337,14 +369,14 @@ For each rule entered, the agent records `scope: "local"` by default unless the 
 
 ### Step C3: Generate Rules File
 
-Build the JSON populating `rules: { [category]: [array_of_rules] }`. Within each section, ecosystem rules go first, then local. Validate against `project_rules_schema.json`. Save to `ai_files/project_rules.json` (same path as software — the type is inferred from project_type in user_pref and persisted in the `type` field of the file as `"agentic"`).
+Build the JSON populating `rules: { [category]: [array_of_rules] }`. Within each section, ecosystem rules go first, then local. Validate against `project_rules_schema.json`. Save to `waves_files/project_rules.json` (same path as software — the type is inferred from project_type in user_pref and persisted in the `type` field of the file as `"agentic"`).
 
 ### Step C4: Success Message
 
 ```
 ✅ Project rules created!
 
-📁 File: ai_files/project_rules.json
+📁 File: waves_files/project_rules.json
 📊 Categories defined: [count] ([N] defaults + [M] custom)
 📊 Total rules: [count]
 

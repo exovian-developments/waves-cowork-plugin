@@ -1,0 +1,11 @@
+{
+  "version": "2026-06",
+  "unit": "usd_per_million_tokens",
+  "note": "Per-model token rates the cost odometer applies to FREEZE the USD in each cost.json (referenced by its pricing_ref). Rates are POLICY, not a framework fact (project_rule #1) — configurable, and the values below are approximate: VERIFY against current Anthropic pricing before relying on the USD. The four-way split is what makes the cost real: cache_read bills at ~0.1x input and cache_creation at ~1.25x input (5-minute ephemeral), so applying the input rate to all tokens overstates ~10x. Tokens are the immutable fact; this table is the policy that translates them — bump `version` when rates change so historical cost.json snapshots stay reproducible.",
+  "models": {
+    "claude-opus-4-8": { "input": 15.0, "output": 75.0, "cache_creation": 18.75, "cache_read": 1.5 },
+    "claude-sonnet-4-6": { "input": 3.0, "output": 15.0, "cache_creation": 3.75, "cache_read": 0.3 },
+    "claude-haiku-4-5": { "input": 1.0, "output": 5.0, "cache_creation": 1.25, "cache_read": 0.1 }
+  },
+  "default_model": "claude-opus-4-8"
+}

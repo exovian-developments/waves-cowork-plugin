@@ -24,7 +24,7 @@
           "type": "string",
           "minLength": 1,
           "description": "High-level description of what this project aims to achieve.",
-          "$comment": "Describe the purpose, audience, and expected outcome. Avoid jargon, write for someone unfamiliar with the project."
+          "$comment": "STOP: ONE sentence — what the project produces and for whom. REDIRECT: detailed structure, phase breakdowns, methodology, package/tool lineage go in structure/standards, NOT here. If you name a tool or methodology, that clause belongs in standards. bad→good: Bad: 'Tesis organizada en 6 capítulos siguiendo metodología cualitativa, con datos de...'. Good: 'Tesis de maestría sobre IA en salud para el comité de la universidad.'"
         },
         "type": {
           "type": "string",
@@ -72,7 +72,7 @@
               "name": {
                 "type": "string",
                 "description": "Component name.",
-                "$comment": "Examples: 'Chapter 1: Introduction', 'Phase 1: Discovery', 'Logo Design'."
+                "$comment": "STOP: a short noun-phrase a non-technical person recognizes (<=~60 chars), like 'Chapter 1: Introduction', 'Phase 1: Discovery', 'Logo Design'. REDIRECT: status goes in status, dependencies in dependencies, the what-it-covers prose in description — NOT here. If you wrote ':' followed by an explanation, that explanation belongs in description."
               },
               "description": {
                 "type": "string",
@@ -108,7 +108,7 @@
           "name": {
             "type": "string",
             "description": "Deliverable name.",
-            "$comment": "Examples: 'Final Thesis Document', 'Brand Guidelines PDF', 'Pitch Deck', 'Market Analysis Report'."
+            "$comment": "STOP: a short noun-phrase a non-technical person recognizes (<=~60 chars), like 'Final Thesis Document', 'Brand Guidelines PDF', 'Pitch Deck'. REDIRECT: format goes in format, contents/purpose prose in description, deadline in due_date — NOT here. If you wrote ':' followed by an explanation, that explanation belongs in description."
           },
           "format": {
             "type": "string",
@@ -179,6 +179,39 @@
           "$comment": "Examples: 'IRB Approval Required', 'GDPR Compliant', 'ISO 27001'."
         }
       }
+    },
+
+    "relations": {
+      "type": "array",
+      "description": "The semantic blast-radius graph: directed edges that say 'a change to X can affect Y' — the dependencies a plain file listing cannot see (e.g. a survey deliverable feeds the final report; the brand guidelines guard every design asset).",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "kind", "why"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The source element the edge starts at — the one whose change can affect the target.",
+            "$comment": "STOP: name an element that EXISTS elsewhere in this manifest — a deliverable, a structure section, a reference, a standard. REDIRECT: do not invent free-floating labels; the graph is only navigable if from/to resolve to real manifest entries. bad: 'the research part'. good: 'literature-review' (a declared deliverable)."
+          },
+          "to": {
+            "type": "string",
+            "description": "The target element the edge points at — the one affected when 'from' changes.",
+            "$comment": "Same discipline as 'from': a real element named elsewhere in the manifest. The edge reads from-kind-to: e.g. 'survey-results' feeds 'final-report'."
+          },
+          "kind": {
+            "type": "string",
+            "description": "The edge verb — HOW 'from' relates to 'to'. Open vocabulary; pick the most precise.",
+            "$comment": "Suggested verbs (OPEN — add others when none fit; recurring ones get officialized via the corpus miner): feeds (produces input the other uses), depends_on (cannot proceed without it), guards (constrains/gates — a standard, a brand rule, an approval), informs (shapes a decision), supersedes (replaces). STOP: one lowercase verb, not a sentence — the sentence is 'why'."
+          },
+          "why": {
+            "type": "string",
+            "description": "The one-line reason this edge matters for blast-radius — what breaks or changes in 'to' when 'from' changes.",
+            "$comment": "STOP: the consequence, not a restatement of the verb. This is the WHOLE point of the edge. bad: 'survey feeds report' (restates from/kind/to). good: 'if the survey sample changes, the report's headline statistics must be recomputed'. REDIRECT: one cause→effect clause, no essays."
+          }
+        }
+      },
+      "default": [],
+      "$comment": "OPTIONAL but high-value — the manifest's reason to exist beyond a deliverables list: an element's blast-radius at a glance, especially when scoping a logbook. STOP: only edges a plain listing CANNOT show — cross-deliverable/cross-standard couplings. REDIRECT: a deliverable simply belonging to a phase is not an edge; capture genuine 'change here forces change there' couplings. Born-compliant (product_rule #13): extra edge fields are allowed (the item is open) — recurring extras are officialization candidates surfaced by the corpus miner."
     },
 
     "notes": {

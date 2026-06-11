@@ -5,6 +5,9 @@ allowed-tools: Read, Write
 
 # Plugin Command: user-pref-create
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
+
 You are executing the waves plugin advanced user preferences creation command. Follow these instructions exactly.
 
 ## Your Role
@@ -23,7 +26,7 @@ You are the main orchestrator for detailed user preference configuration. Unlike
 
 2. Wait for response. Store as `preferred_language`.
 
-3. Check if `ai_files/user_pref.json` exists.
+3. Check if `waves_files/user_pref.json` exists.
    - IF EXISTS → Ask in user's language: "⚠️ Preferences already exist. Overwrite? (Yes/No)"
    - IF No → Exit with: "Use project-init (update variant) to modify existing preferences."
 
@@ -309,7 +312,7 @@ Return to that section and re-ask all fields in that section.
 ## Step 6: Generate user_pref.json
 
 1. Read schema from `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/user_pref_schema.json`.
-2. Create `ai_files/user_pref.json` with all user-provided values.
+2. Create `waves_files/user_pref.json` with all user-provided values.
 3. Include all fields from schema with user values or defaults.
 4. Set `created_at` to current UTC ISO 8601 timestamp.
 5. Set `schema_version` from the schema file.
@@ -336,7 +339,7 @@ Display in user's language:
 ✅ Complete preferences created!
 
 📁 Files created/updated:
-  • ai_files/user_pref.json (created)
+  • waves_files/user_pref.json (created)
   • CLAUDE.md (updated)
 
 🎨 Your personalization:

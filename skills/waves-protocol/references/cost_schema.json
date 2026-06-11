@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Waves Cost Schema",
+  "description": "The token-cost snapshot of one unit of work (w6 Phase 8 — the ECONOMIC sensor, design_principle #13, blueprint capability 'self-instrumentation' lens c). One cost.json is CO-LOCATED in a logbook's directory (location IS the semantics, dp#11): waves/<wN>/logbooks/<slug>/cost.json holds, per primary objective, the tokens consumed (cache vs normal) and a USD figure FROZEN at capture time; the per-primary figures SUM to the logbook total. A diverged_work gets the same file with a single total (no primaries). Written by an odometer hook at each primary-completion (it reads the session transcript's message.usage + the subagents' transcripts, subtracts the last checkpoint, attributes the delta). USD is frozen — not recomputed at read — because the point is a per-release historical snapshot: 'creating a logbook cost 30% fewer tokens in 3.1 than in 3.0' is both a sales line and an optimization compass. Tokens are the immutable fact (they measure framework efficiency, isolated from Anthropic's pricing); USD is the frozen translation.",
+  "$comment": "CANONICAL SHAPE: a single object with keys generated_at, waves_version, currency, pricing_ref, per_primary, total. OPEN (never additionalProperties:false, dp#11) — a recurring extra key is a signal for the corpus miner, not an error. STOP: one unit of work per file (one logbook, or one diverged_work). INVARIANT: sum(per_primary[].usd) == total.usd and the same per token field — the odometer writes both, the reader never recomputes (USD is frozen). REDIRECT: the BEHAVIOR of what was invoked lives in the usage telemetry logs, not here; the ANALYSIS of the artifacts lives in corpus-insights.json, not here; the pricing TABLE lives in pricing.json (this file only REFERENCES it via pricing_ref). An undeclared sibling field signals you are writing the wrong artifact. bad: putting a per-command heat map here (that is /waves:usage). good: per_primary[] each {tokens cache+normal, frozen usd} summing to total.",
+  "type": "object",
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp of the last odometer write to this file."
+    },
+    "waves_version": {
+      "type": "string",
+      "description": "The Waves plugin version in effect when this cost was captured (from plugin.json). The KEY that makes a cost comparable across releases — 'the same operation cost less in the newer version'.",
+      "$comment": "STOP: one version string. REDIRECT: it is the version of WAVES, not of the user's product. bad: the product's app version. good: '3.0.11'."
+    },
+    "currency": {
+      "type": "string",
+      "description": "ISO currency of the frozen usd figures. Default 'USD'."
+    },
+    "pricing_ref": {
+      "type": "string",
+      "description": "Identifier of the pricing.json table snapshot used to freeze the USD (e.g. 'pricing.json@2026-06'). Makes the frozen USD reproducible and auditable.",
+      "$comment": "STOP: one reference to the pricing table version. REDIRECT: the actual per-model rates live in pricing.json, not here — this only names which snapshot was applied. bad: inlining the price-per-million numbers here. good: 'pricing.json@2026-06'."
+    },
+    "per_primary": {
+      "type": "array",
+      "description": "One entry per primary objective of the logbook, in id order — the 'items of the trip' (each primary = hotel/flight/food, NOT the per-subagent fuel). The subagents and hooks a primary triggered are SUMMED INTO that primary, not broken out. Empty for a diverged_work (which has no primaries — its cost is in total).",
+      "items": { "$ref": "#/$defs/cost_entry" }
+    },
+    "total": {
+      "type": "object",
+      "description": "The cost of the whole unit of work — the SUM of per_primary (for a logbook) or the single cost (for a diverged_work). This is 'what the vacation cost'.",
+      "$comment": "STOP: one total = the sum of per_primary (logbook) or the lone cost (diverged_work). INVARIANT: total.usd == sum(per_primary[].usd) and likewise per token field, when per_primary is non-empty. REDIRECT: do not store a roadmap/project rollup here — /waves:cost computes those by aggregating many cost.json files. bad: a project-wide total in one logbook's file. good: this logbook's own total.",
+      "properties": {
+        "tokens": { "$ref": "#/$defs/tokens" },
+        "usd": { "type": ["number", "null"], "description": "Frozen total USD (null if no pricing.json was available at capture — tokens are still recorded)." }
+      },
+      "required": ["tokens"]
+    }
+  },
+  "required": ["generated_at", "waves_version", "total"],
+  "$defs": {
+    "tokens": {
+      "type": "object",
+      "description": "The four billed token types. The cache vs normal split is what yields REAL cost: cache_read bills at ~0.1x and cache_creation at ~1.25x of input, so a naive total x input-price overstates ~10x.",
+      "$comment": "STOP: the four counts only — input, output, cache_creation, cache_read. REDIRECT: the USD derived from these belongs in the sibling `usd`, not here; the rates belong in pricing.json. bad: adding a 'usd' inside tokens. good: {input, output, cache_creation, cache_read} as integers.",
+      "properties": {
+        "input": { "type": "integer", "minimum": 0, "description": "Normal (non-cached) input tokens — billed full." },
+        "output": { "type": "integer", "minimum": 0, "description": "Output tokens — billed highest (~5x input)." },
+        "cache_creation": { "type": "integer", "minimum": 0, "description": "Cache-write tokens — billed ~1.25x input." },
+        "cache_read": { "type": "integer", "minimum": 0, "description": "Cache-read tokens — billed ~0.1x input (cheap)." }
+      },
+      "required": ["input", "output", "cache_creation", "cache_read"]
+    },
+    "cost_entry": {
+      "type": "object",
+      "description": "The frozen cost of one primary objective: its tokens (cache vs normal) and frozen USD, including everything that primary triggered (implementation turns + the subagents/hooks it spawned), summed.",
+      "$comment": "STOP: one primary's cost — tokens + frozen usd + its id/label for traceability. REDIRECT: do not break out per-subagent or per-turn detail (that is the 'fuel of the plane' — out of scope for the high-level snapshot); the WHY of the primary lives in the logbook, not here. bad: a nested per-subagent cost array. good: {primary_id, label, tokens, usd}.",
+      "properties": {
+        "primary_id": { "type": "integer", "minimum": 1, "description": "The main objective id this cost is attributed to." },
+        "label": { "type": "string", "description": "Short echo of the primary's content, for reading the file without cross-referencing the logbook." },
+        "tokens": { "$ref": "#/$defs/tokens" },
+        "usd": { "type": ["number", "null"], "description": "Frozen USD for this primary (null if no pricing.json at capture)." }
+      },
+      "required": ["primary_id", "tokens"]
+    }
+  }
+}

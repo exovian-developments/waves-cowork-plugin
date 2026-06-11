@@ -4,7 +4,29 @@ description: Update an existing logbook with progress entries, objective status 
 
 # Command: /waves:logbook-update
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
 You are executing the waves logbook update command. Follow these instructions exactly.
+
+## Multi-project scope
+
+Apply the **Multi-project Path Resolution** helper from `plugin/skills/waves-protocol/SKILL.md` before any other step:
+
+- Parse `--project <name>` from the command arguments.
+- If present: set `base_path = projects/<name>/waves_files/` and validate that projects/<name>/ exists (abort with a "scope not found" error if it does not).
+- If absent: set `base_path = waves_files/` (backwards-compatible default — identical to pre-3.x single-project behavior).
+
+Use `base_path` for every `waves_files/...` reference in the steps below. When the steps say `waves_files/<artifact>` they mean `<base_path><artifact>` in multi-project mode.
+
+When `--project` is present, also write the **session marker** via bash BEFORE any artifact operation — this is what makes the active scope visible to hooks (`plugin/hooks/_lib/scope-resolve.sh`) when they fire on subsequent Edit/Write:
+
+```bash
+mkdir -p "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}"
+printf '%s=%s\n' "$(printf '%s' "$PWD" | { md5 -q 2>/dev/null || md5sum | awk '{print $1}'; })" "<scope_name>" \
+  > "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}/active-scope"
+```
+
+Idempotent (overwrite-safe). The marker maps `<cwd_md5>=<scope_name>` so a session that traverses multiple cwds keeps one line per cwd. When `--project` is absent, **do not write** the marker — hooks fall back to root naturally.
 
 ## Your Role
 
@@ -12,7 +34,7 @@ You are the main orchestrator for logbook updates. You will help users track pro
 
 ## Step -1: Prerequisites Check (CRITICAL)
 
-Check if `ai_files/user_pref.json` exists.
+Check if `waves_files/user_pref.json` exists.
 
 IF NOT EXISTS:
 ```
@@ -24,7 +46,7 @@ Please run first:
 → EXIT COMMAND
 
 IF EXISTS:
-1. Read `ai_files/user_pref.json`
+1. Read `waves_files/user_pref.json`
 2. Extract `user_profile.preferred_language` → Use for all interactions
 3. Extract `project_context.project_type` → For schema validation
 
@@ -73,7 +95,7 @@ For ambiguities the agent cannot resolve confidently (e.g. "marca completado" wi
 ### Loading the logbook
 
 **IF `filename` provided:**
-1. Search for file in `ai_files/waves/*/logbooks/[filename].json`
+1. Search for file in `waves_files/waves/*/logbooks/[filename].json`
 2. IF NOT EXISTS → Error: "Logbook not found: [filename]"
 3. IF EXISTS → Load logbook, note which wave it belongs to, continue to schema migration.
 
@@ -88,7 +110,7 @@ For ambiguities the agent cannot resolve confidently (e.g. "marca completado" wi
    /waves:logbook-update TICKET-123 "marca objetivo 3 completado"
 ```
 
-2. List available logbooks from all waves `ai_files/waves/*/logbooks/*.json`, grouped by wave:
+2. List available logbooks from all waves `waves_files/waves/*/logbooks/*.json`, grouped by wave:
 ```
 📚 Available logbooks:
 
@@ -580,7 +602,7 @@ Return to calling step.
 - IF `project_type === "software"` OR `project_type === "agentic"` → Validate against `logbook_software_schema.json` (the schema is structurally compatible with both — agentic logbooks carry scope.files pointing to skill/hook/config files)
 - IF `project_type === "general"` → Validate against `logbook_general_schema.json`
 
-**Save to `ai_files/waves/[wave_name]/logbooks/[filename].json`**
+**Save to `waves_files/waves/[wave_name]/logbooks/[filename].json`**
 
 ## STEP AUDIT: Logbook Integrity Audit (always, unless explicitly skipped)
 
@@ -593,10 +615,10 @@ This step **runs every time the command reaches it**, regardless of which operat
 
 1. Set `audit.is_already_audited = false` in the logbook (a fresh audit is owed).
 2. Save the logbook with the flag updated (atomic write).
-3. Spawn the integrity reviewer subagent following the **same protocol as Step A6 in `waves:logbook-create`**: blocking, model from `agent_config.metacognition_model` (default `opus`), output to `ai_files/waves/[wave_name]/audits/logbook-[basename].json`, same adversarial prompt that flags `missing_rules_in_primary`, `completion_guide_missing_apply_rule_lines`, `rule_id_not_found`, `decomposition_mismatch`, `duplicate_primary_content`, `primary_empty_scope_files`, `secondary_missing_completion_guide`, `scope_files_path_not_found`, `completion_guide_too_generic`, `orphan_secondary` (only `critical` and `warning` severities).
+3. Spawn the integrity reviewer subagent following the **same protocol as Step A6 in `waves:logbook-create`**: blocking, model from `agent_config.metacognition_model` (default `opus`), output to `waves_files/waves/[wave_name]/audits/logbook-[basename].json`, same adversarial prompt that flags `missing_rules_in_primary`, `completion_guide_missing_apply_rule_lines`, `rule_id_not_found`, `decomposition_mismatch`, `duplicate_primary_content`, `primary_empty_scope_files`, `secondary_missing_completion_guide`, `scope_files_path_not_found`, `completion_guide_too_generic`, `orphan_secondary` (only `critical` and `warning` severities).
 4. Process findings: critical findings reviewed and applied with full context; warnings decided per-finding; rejections recorded in `resolved_decisions` with `method: "integrity_audit_override"`.
 5. After applying fixes (or determining none are needed), update the logbook: `audit.is_already_audited = true`, `audit.audit_file = "<relative path>"`.
-6. Append a `recent_context` entry: `"Integrity audit run: [N] critical, [M] warnings. Audit report: ai_files/waves/[wave_name]/audits/logbook-[basename].json"`.
+6. Append a `recent_context` entry: `"Integrity audit run: [N] critical, [M] warnings. Audit report: waves_files/waves/[wave_name]/audits/logbook-[basename].json"`.
 
 ### Why STEP AUDIT is unconditional
 
@@ -611,7 +633,7 @@ By making STEP AUDIT unconditional, `logbook-update` becomes the single entry po
 ```
 ✅ Logbook updated!
 
-📁 File: ai_files/waves/[wave_name]/logbooks/[filename].json
+📁 File: waves_files/waves/[wave_name]/logbooks/[filename].json
 
 📊 Changes made:
 • Context entries added: [count]

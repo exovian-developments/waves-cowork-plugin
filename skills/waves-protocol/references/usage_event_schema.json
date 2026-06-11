@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Waves Usage Event Schema",
+  "description": "One usage-telemetry event line (w6 Phase 7 — the behavioral sensor that complements the corpus miner's output sensor). Telemetry is append-only JSONL, MULTI-LOG by type (design_principle #11 navigability, owner decision): commands.jsonl / hooks.jsonl / subagents.jsonl under $CLAUDE_PLUGIN_DATA/telemetry/. Every line of every log validates against THIS one schema — the `event` enum spans all three logs. Captured zero-token by bash hooks (waves-telemetry.sh) that are silent and ALWAYS exit 0 — a telemetry failure must never break a Waves command. Local-first, no server (out_of_scope #2); opt-out via .claude/waves-telemetry-off. The data model was grounded by the simulate-before-building exercise (waves_files/waves/w6/sandbox/telemetry-prototype/FINDINGS.md), NOT inferred — `inv` and the command outcomes were the two improvements the first use revealed.",
+  "$comment": "CANONICAL SHAPE: a single flat object — one per JSONL line — with keys ts, name, event, session, scope, thread, inv. OPEN (never additionalProperties:false, design_principle #11) — a recurring extra key is a signal for the corpus miner, not an error. STOP: one event per line (one append). REDIRECT: aggregation/rollups (heat map, block-rate, footprint) are COMPUTED by /waves:usage at read time from these raw lines — they do NOT belong in the event; the work-unit's full lineage lives in its artifact (logbook/diverged_work/blueprint), this only tags it via `thread`. An undeclared sibling field signals you are writing a rollup into a raw event. bad: a line carrying {name, count: 47, avg_footprint: 3.2} (that is a /waves:usage aggregate). good: {ts, name: 'waves:logbook-create', event: 'invoked', session, scope, thread, inv}.",
+  "type": "object",
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the event fired. ts ordering is what lets /waves:usage reconstruct sequences and the maturation trend."
+    },
+    "name": {
+      "type": "string",
+      "description": "The thing the event is about, using its real package-qualified identifier (naming_conventions #6): a command (e.g. 'waves:logbook-create'), a hook (e.g. 'waves-gate'), or a subagent type/label.",
+      "$comment": "STOP: one identifier. REDIRECT: which log it lands in is `event`+the log file, not a prefix here; the human short name (Otto/Facu) is NEVER used (#6). bad: 'the logbook command (Otto)'. good: 'waves:logbook-create'."
+    },
+    "event": {
+      "type": "string",
+      "enum": ["invoked", "completed", "aborted", "fired", "blocked", "spawned"],
+      "description": "What happened. commands.jsonl currently emits 'invoked' (captured via UserPromptSubmit for typed slash-commands + PreToolUse[Skill] for programmatic ones). 'completed'/'aborted' are RESERVED: Claude Code does not fire PostToolUse for the Skill tool, so per-command outcome (good-vs-broken) is not capturable in v1 — the enum keeps them forward-compatibly for when a turn-level mechanism lands. hooks.jsonl uses fired|blocked (block-rate + the maturation trend — these fire on real Edit|Write|Bash hooks and work today). subagents.jsonl uses spawned (machinery cost).",
+      "$comment": "STOP: one event, drawn from the subset valid for its log. REDIRECT: do not invent per-log enums — this one enum spans all three logs (DRY, product_rule #10); a new outcome is a new enum value here, not a new field. NOTE: completed/aborted are reserved (not emitted in v1 — no PostToolUse for Skill); do not synthesize them. bad: event 'command_finished_ok'. good: 'invoked'."
+    },
+    "session": {
+      "type": "string",
+      "description": "The Claude Code session id (from the hook stdin's session_id), sanitized. Groups events that happened in one session; a thread can span many sessions, so session alone is NOT the work-unit key — `thread` is."
+    },
+    "scope": {
+      "type": "string",
+      "description": "The active project scope: 'root', or a child product name in multi-project mode (real package name, #6). Resolved from the same active-scope marker the hooks already read (scope-resolve.sh).",
+      "$comment": "STOP: one scope label. REDIRECT: the work-unit within the scope is `thread`, not here. bad: 'root/conversational_engine_ba/the logbook'. good: 'conversational_engine_ba'."
+    },
+    "thread": {
+      "type": "string",
+      "description": "The work-thread this event served: a logbook slug, a diverged_work slug, or a top artifact ('blueprint'/'roadmap') for work serving them directly. Read from a current-work-thread marker (Phase 7 P2, reusing the scope-marker infra). This is the COARSE correlation that unifies telemetry with artifact lineage — a thread spans many invocations across many sessions (thread ⊇ inv). Empty/absent when no work-thread is active (e.g. a one-off command whose thread is the artifact it produces).",
+      "$comment": "STOP: one work-unit slug, or empty. REDIRECT: a single command run is `inv`, not thread; the artifact's own content stays in the artifact. bad: thread holding a whole logbook path with anchors. good: 'phase_7' (the logbook slug) or 'blueprint' or ''."
+    },
+    "inv": {
+      "type": "string",
+      "description": "Per-invocation id: one command invocation and all the events it triggered (the subagents it spawned, the hooks that fired/blocked in its run) share one inv — the FINE correlation. Set on the command's 'invoked' event and inherited by same-session child events until 'completed'/'aborted'. Empty/absent for events outside any tracked invocation. inv was the first-use exercise's first improvement: without it, per-invocation footprint and cost-per-command are physically uncomputable.",
+      "$comment": "STOP: one invocation id, or empty. REDIRECT: the broader work-unit is `thread` (thread ⊇ inv); per-invocation aggregates are computed by /waves:usage, not stored here. bad: inv carrying a counter like 'inv-3-of-12'. good: a stable opaque id shared by one invocation's events, or ''."
+    }
+  },
+  "required": ["ts", "name", "event"]
+}

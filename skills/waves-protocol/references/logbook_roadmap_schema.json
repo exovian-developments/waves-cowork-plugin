@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Logbook Roadmap Schema",
   "description": "Product-level roadmap with rolling context. Orchestrates phases and milestones that spawn individual logbooks. Sits above logbook_software_schema and logbook_general_schema in the artifact hierarchy: blueprint (WHAT/WHY) → roadmap (WHEN/ORDER) → logbook (HOW).",
-  "$comment": "One per product. This is the strategic orchestrator — it tracks phases, milestones, and decisions at the product level. Detailed implementation lives in individual logbooks referenced via milestones[].logbook_ref. Do NOT duplicate logbook-level detail (completion_guides, scope.files, recommendations) here.",
+  "$comment": "One per product. The strategic orchestrator — tracks phases, milestones, and decisions at the product level. Canonical shape (mid-flight/forked adopters read THIS, not the $defs): top-level keys are exactly product, vision, phases, decisions, open_questions, recent_context, history_summary, future_reminders. phases is an ARRAY of {id:integer, milestones:[...]}; milestone.id is the STRING 'N.M'; decision.id is an integer. An undeclared sibling key (e.g. 'meta', 'philosophy', 'ui_requirements', 'provider_api') is the signal you are writing in the wrong artifact — relocate it, do not invent the field. Detailed implementation lives in individual logbooks referenced via milestones[].logbook_ref; do NOT duplicate logbook-level detail (completion_guides, scope.files, recommendations) here.",
   "type": "object",
   "properties": {
     "product": {
@@ -213,8 +213,8 @@
         "content": {
           "type": "string",
           "maxLength": 180,
-          "description": "Verifiable outcome statement. When this is true, the milestone is done.",
-          "$comment": "Write as outcome, not task. Validate: Can you answer 'Is this done?' with yes/no? If not, rewrite. This becomes the seed for the spawned logbook's ticket.description."
+          "description": "Single verifiable end-state. When this is true, the milestone is done.",
+          "$comment": "STOP: ONE checkable end-state, written as outcome not task. Can you answer 'Is this done?' with a clean yes/no? If not, rewrite or split. FORBIDDEN here: implementation steps, file lists, verification commands, and 'BONUS' extras — those belong in the spawned logbook's objectives/completion guide, not the milestone. A '+'/'y'/em-dash/colon-list of deliverables means it is multi-concern: split into multiple milestones. bad: 'Auth done: migration 011 + User entity + UserRepository + login view + tests, BONUS refresh tokens'. good: 'A registered user can log in and receives a valid session token'. This becomes the seed for the spawned logbook's ticket.description."
         },
         "status": {
           "type": "string",
@@ -251,20 +251,20 @@
         "decision": {
           "type": "string",
           "maxLength": 200,
-          "description": "What was decided.",
-          "$comment": "Clear, unambiguous statement. E.g., 'Use Firebase Auth with custom claims for role management' not 'We might use Firebase'."
+          "description": "The choice that was made, in ONE declarative clause.",
+          "$comment": "STOP: state ONLY the resolved choice in one declarative clause ('Adopt X over Y'). One decision per entry. FORBIDDEN here: progress reports, counts of completed objectives, file/work inventories (those go in recent_context), and the reasoning (that goes in 'context'). Forbid '[AUTO] Phase N COMPLETED, M/N primaries...' dumps. If the text describes work DONE rather than a fork that was RESOLVED, it is not a decision — do not record it here. bad: '[AUTO] Phase 7 COMPLETED, 4/4 primaries done — added migration 011, User entity, UserRepository, AuthDataSource, chose Riverpod for state'. good (decision): 'Adopt Riverpod over Bloc for auth state management'; (its reasoning → context; its file list → recent_context)."
         },
         "context": {
           "type": "string",
           "maxLength": 300,
           "description": "Why this was decided and what alternatives were considered.",
-          "$comment": "Include: the trigger (what forced the decision), alternatives evaluated, and why this option won. Prevents future re-discussion."
+          "$comment": "STOP: the WHY only — must contain trigger + alternatives + why-this-won, never empty. FORBIDDEN here: the choice itself (that is 'decision'), progress/status reports, file inventories (recent_context). Test: if it does not name what FORCED the decision and what was REJECTED, it is incomplete. bad: 'Riverpod' (just restates the choice). good: 'Auth needed reactive state shared across 3 views; evaluated Bloc (more boilerplate) and setState (no sharing); Riverpod won on testability and existing team familiarity'."
         },
         "impact": {
           "type": "string",
           "enum": ["low", "medium", "high"],
           "description": "How much this decision affects the product direction.",
-          "$comment": "high: changes architecture, scope, or user experience fundamentally. medium: affects a phase or feature significantly. low: implementation detail with limited blast radius."
+          "$comment": "STOP: pick exactly ONE enum value; no prose, no justification (the WHY lives in 'context'). high: changes architecture, scope, or user experience fundamentally. medium: affects a phase or feature significantly. low: implementation detail with limited blast radius."
         }
       },
       "required": ["id", "created_at", "decision", "context", "impact"]

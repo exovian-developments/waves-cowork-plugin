@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "LLM Logbook Schema (General Projects)",
   "description": "Schema for tracking context across sessions in non-software projects (academic, creative, business, other). Supports long-term memory, objective tracking with actionable guidance, and progress documentation.",
+  "$comment": "CANONICAL SHAPE (read this if you forked or adopted mid-flight): the logbook is an object with exactly these top-level keys — ticket, objectives, recent_context, history_summary, future_reminders, governance_context. 'objectives' has 'main' and 'secondary', each an ARRAY of objects with integer id. There is NO 'meta', 'context', 'completed_at', 'notes', or 'ui_requirements' top-level field. If you find yourself wanting to add an undeclared sibling field, that is the signal you are putting content in the wrong artifact — re-read where it belongs (strategy → roadmap; the what+why of a deliverable → objectives; running progress → recent_context).",
   "type": "object",
   "properties": {
     "ticket": {
@@ -19,10 +20,31 @@
           "description": "URL to related resource (project management tool, shared document, reference material).",
           "$comment": "Optional. Leave empty string if no external resource. Examples: Notion page, Google Doc, Trello card."
         },
+        "external_ref": {
+          "type": "object",
+          "description": "Structured reference to the task in an external tracker, when a plain url is insufficient (e.g. an Asana task id, a Notion database row).",
+          "$comment": "Optional. Officializes the external-id field adopters invented. STOP: one external system per logbook; if the work spans two trackers, that is two logbooks. REDIRECT: the human link goes in `url`; the task prose in `description`; do NOT add system-specific custom keys here. `system` is a free string (no closed enum — validating a specific tracker is the command's job, not the schema's). bad: {'asana_id': 'X', 'notion': 'Y'} (two systems + custom keys). good: {'system': 'asana', 'id': '1203...', 'url': 'https://...'}.",
+          "properties": {
+            "system": { "type": "string", "description": "Name of the external tracker (free string), e.g. 'asana', 'notion', 'trello'." },
+            "id": { "type": "string", "description": "Identifier of the item within that system." },
+            "url": { "type": "string", "description": "Direct link to the item (may duplicate ticket.url)." }
+          },
+          "required": ["system", "id"]
+        },
+        "ui_requirements": {
+          "type": "object",
+          "description": "UI/visual scope of the task, when it involves a visual deliverable. Optional. Officializes the field logbook-create Step 2.1 already emits.",
+          "$comment": "Optional. STOP: describe visual SCOPE only — whether there is a visual deliverable, the references, brief notes. REDIRECT: the production steps go in the secondaries' completion_guide; design rationale -> a decision or the brief; do NOT paste full specs here. bad: the entire brand-guideline text. good: {has_ui: true, visual_references: ['brief.pdf'], notes: 'follow brand palette v2'}.",
+          "properties": {
+            "has_ui": { "type": "boolean", "description": "True if the task involves a visual/UI deliverable." },
+            "visual_references": { "type": "array", "items": { "type": "string" }, "description": "Paths or URLs to mocks, references, examples." },
+            "notes": { "type": "string", "description": "Brief notes on the visual requirements." }
+          }
+        },
         "description": {
           "type": "string",
           "description": "Detailed explanation of what needs to be accomplished. Includes acceptance criteria, deadlines, or constraints if available.",
-          "$comment": "Ask user to explain thoroughly. Include: deliverables, deadlines, stakeholders, constraints."
+          "$comment": "GOAL + ACCEPTANCE in 2-4 sentences (~600 chars is plenty). State the deliverable and how you will know it is done. This ANCHORS the work — it is not a design doc, a step list, or a planning dump. REDIRECT: how to do it (that is each secondary's completion_guide), the why behind each objective (that is main_objective.context), running progress (that is recent_context). bad: a 1500-char essay listing every section, every stakeholder email, the full methodology, and a phase-by-phase plan → good: 'Publish the Q3 market-entry report. Done when the 12-page report is delivered to the board with all 4 required sections (market size, competitors, pricing, risks) and approved in the Jun 30 review.'"
         }
       },
       "required": ["title", "description"]
@@ -164,6 +186,23 @@
         },
         "required": ["id", "created_at", "content", "when"]
       }
+    },
+
+    "governance_context": {
+      "type": "object",
+      "description": "Compact extracted subset of the blueprint chain (scope → product → company) that impacts this logbook's direction. Same shape as logbook_software_schema.governance_context (cross-schema consistency).",
+      "$comment": "Populated by logbook-create A1.4 via deterministic jq queries against each blueprint in the parent_blueprint chain. Loaded into objectives-implement Step 5 'Governance banner' so implementers carry blueprint-level alignment without re-reading full blueprints. Forward-only: pre-existing logbooks without this field continue to validate; new logbooks populate it.",
+      "properties": {
+        "blueprint_chain": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "path": { "type": "string" }, "blueprint_type": { "type": "string", "enum": ["standard", "autonomous_entity", "company"] } }, "required": ["level", "path"] } },
+        "matched_capabilities": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "id": { "type": "integer" }, "capability": { "type": "string", "maxLength": 300 }, "is_essential": { "type": "boolean" }, "acceptance_criteria": { "type": "array", "items": { "type": "string" } } }, "required": ["level", "id", "capability"] } },
+        "related_flows": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "type": { "type": "string", "enum": ["user_flow", "system_flow", "view"] }, "id": { "type": "integer" }, "name": { "type": "string", "maxLength": 100 }, "entry_point": { "type": "string", "maxLength": 200 }, "termination": { "type": "string", "maxLength": 200 } }, "required": ["level", "type", "id", "name"] } },
+        "governing_design_principles": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "id": { "type": "integer" }, "principle": { "type": "string", "maxLength": 300 } }, "required": ["level", "id", "principle"] } },
+        "applicable_product_rules": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "id": { "type": "integer" }, "rule": { "type": "string", "maxLength": 300 }, "applies_to": { "type": "string", "maxLength": 200 } }, "required": ["level", "id", "rule"] } },
+        "out_of_scope_reminders": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "id": { "type": "integer" }, "statement": { "type": "string", "maxLength": 300 } }, "required": ["level", "id", "statement"] } },
+        "relevant_decisions": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "id": { "type": "integer" }, "decision": { "type": "string", "maxLength": 300 }, "impact_on": { "type": ["string", "null"], "maxLength": 200 } }, "required": ["level", "id", "decision"] } },
+        "success_metrics": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "id": { "type": "integer" }, "metric": { "type": "string", "maxLength": 200 }, "success_signal": { "type": "string", "maxLength": 300 } }, "required": ["level", "id", "metric"] } },
+        "autonomous_entity_identity": { "type": ["object", "null"], "properties": { "level": { "type": "string", "enum": ["scope", "product", "company"] }, "identity": { "type": "string" }, "voice": { "type": "string" }, "operation_modes": { "type": "string" }, "operational_limits": { "type": "string" } } }
+      }
     }
   },
 
@@ -191,13 +230,13 @@
           "type": "string",
           "maxLength": 180,
           "description": "Verifiable outcome statement that serves as acceptance criteria. When this statement is true, the objective is achieved.",
-          "$comment": "Write as outcome, not task. Validate: Can you clearly determine if this is done? If not, rewrite to be more specific."
+          "$comment": "ONE verifiable outcome per objective. STOP: if the text contains '+', 'y'/'and', an em-dash, a colon-list, or two verbs, it is multi-concern — split it into separate objectives. Write as outcome, not task; ask 'can I clearly say yes/no this is done?'. REDIRECT: the design choice or method (→ main_objective.context for the why, the secondary's completion_guide for the how); a second deliverable (→ a second objective); how you will prove it (→ verification_demonstrations). bad: 'Draft chapter 2 AND get advisor approval AND format citations in APA' (3 concerns) → good: 'Chapter 2 draft completed and approved by advisor' (one outcome; APA formatting and the approval check become their own objectives/demonstrations)."
         },
         "context": {
           "type": "string",
           "maxLength": 300,
           "description": "Rationale and background: who needs this, what problem it solves, deadlines, dependencies, or constraints.",
-          "$comment": "Include information that helps make decisions. Reference stakeholders, deadlines, dependencies, or quality standards."
+          "$comment": "The WHY only — who needs this, what constraint or deadline forces the approach. STOP: keep it to the rationale; the moment you write a verb-of-action ('write', 'send', 'format') you have drifted into how. REDIRECT: implementation steps (→ the secondary's completion_guide); planning-process labels like 'Dimensión N', 'Mindset:', 'orthogonality_review' (those are planning scratch, not durable context — never persist them); re-listing the materials/standards already in scope.references / scope.standards. Test: remove every proper noun and label — if no 'why' sentence remains, you wrote 'how' in the wrong field. bad: 'Dimensión 2 / Mindset: rigor. Apply APA per scope.standards, see Chapter 1 draft, then write section by section' → good: 'The dissertation committee requires chapter 2 before the Jul 15 defense scheduling deadline; it depends on the approved chapter 1 framing.'"
         },
         "scope": {
           "type": "object",
@@ -229,7 +268,75 @@
           "type": "string",
           "enum": ["not_started", "active", "blocked", "achieved", "abandoned"],
           "description": "Current state: not_started (pending work), active (in progress), blocked (waiting on external input), achieved (completed), abandoned (cancelled).",
-          "$comment": "Set only ONE main objective as 'active' at a time. Use 'blocked' when waiting for feedback, resources, or dependencies. Set 'achieved' when content statement is verified true."
+          "$comment": "Set only ONE main objective as 'active' at a time. Use 'blocked' when waiting for feedback, resources, or dependencies. Set 'achieved' ONLY when content statement is verified true AND all entries in verification_demonstrations have verdict='pass' (design_principle #8 — see field $comment for protocol). For general projects in w4: verification_demonstrations is build-forward-compatible (taxonomy declared, evidence-critic opt-in via verification rule)."
+        },
+        "verification_demonstrations": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Observable executable evidence that this primary outcome was achieved. Required on every NEW primary (forward-only per blueprint decision #15). Status='achieved' requires verdict='pass' on every entry. Empty/absent only on grandfathered historical logbooks. For general projects: forward-compatible — evidence-critic is opt-in via verification rule (decision #6 w4 roadmap).",
+          "$comment": "design_principle #8 (Demonstration over declaration). PROTOCOL (logbook-create Phase 4 w4): A4.5 verification-designer (fresh subagent, blocking) proposes type-aware demonstrations per primary based on scope.references + standards + content keywords. A4.6 feasibility-checker (fresh subagent, blocking) verifies that required resources (documents, tools, reviewers) are accessible; if missing, A4 inserts provisioning secondaries BEFORE work begins. Both subagents UNCONDITIONAL. General-project type lens (Phase 3.4 w4): evidence-critic OPT-IN via verification rule — for academic/creative/business primaries, types like external_observation (peer review, stakeholder approval), documentation_consistency (deliverable matches spec), behavior_check (assert the artifact does what it claims) are typical; software-only types (unit_test/integration_test) can still be selected if the primary touches code-adjacent deliverables. Bootstrap forward-compatible: general projects build with the field structurally even if validation tooling matures in later waves. DRY with test_cases (product_rule #10): when a primary's secondaries declared test_cases, the demonstration REFERENCES the suite covering them ('suite covering these cases passes, verdict=pass') and does NOT re-enumerate — test_cases SPECIFY (design), verification_demonstrations PROVE (achievement). Enumerate once, prove once.",
+          "items": {
+            "type": "object",
+            "description": "Single verification demonstration: one observable check tied to an acceptance criterion of the primary.",
+            "$comment": "Each entry binds a verification TYPE to a concrete TARGET and an EXPECTED observable outcome. command_or_method describes how to execute (file inspection, reviewer call, deterministic command). verdict='pending' until executed; flip to 'pass' or 'fail' with evidence.",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "unit_test",
+                  "integration_test",
+                  "sandbox_execution",
+                  "schema_validation",
+                  "behavior_check",
+                  "release_verification",
+                  "state_change_verification",
+                  "external_observation",
+                  "documentation_consistency",
+                  "adversarial_review"
+                ],
+                "description": "Verification taxonomy (10 types — shared across project types). General-leaning: external_observation (peer/stakeholder review), documentation_consistency (deliverable vs spec/standard), behavior_check (artifact does what it claims), adversarial_review (fresh-subagent critique). Software-only types remain available for code-adjacent general primaries.",
+                "$comment": "A4.5 verification-designer infers type from primary's scope.references + standards + content keywords. General patterns: paper/manuscript → external_observation (reviewer) + documentation_consistency (style guide); design assets → external_observation (stakeholder approval) + behavior_check (asset renders/responds as described); business plan/strategy → documentation_consistency (vs methodology) + adversarial_review (fresh critic)."
+              },
+              "target": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "Concrete artifact being verified — document path/URL, deliverable name, asset identifier, reviewer/stakeholder role.",
+                "$comment": "Reference the actual artifact. Examples: 'Chapter 2 manuscript v3 (Google Doc URL)', 'Brand identity package final v2', 'Q3 marketing plan section 4'."
+              },
+              "expected": {
+                "type": "string",
+                "maxLength": 300,
+                "description": "Observable outcome that proves the demonstration passes. Must be checkable, bound to an acceptance criterion.",
+                "$comment": "Concrete, not aspirational. Examples: 'reviewer signs approval form', 'APA style checker reports 0 violations', 'stakeholder approval recorded in meeting notes dated YYYY-MM-DD', 'critic verdict in [confirmed, gold]'. Avoid 'looks good', 'feels right'."
+              },
+              "command_or_method": {
+                "type": "string",
+                "maxLength": 300,
+                "description": "How this demonstration is executed: deterministic command, reviewer/stakeholder invocation, file inspection method, or subagent prompt.",
+                "$comment": "Examples: 'send to advisor for review (deadline: 3 days)', 'run APA-style checker over chapter PDF', 'evidence-critic subagent reviews substance vs claim', 'compare deliverable section 4 against brand guidelines v2'."
+              },
+              "verdict": {
+                "type": "string",
+                "enum": ["pending", "pass", "fail"],
+                "default": "pending",
+                "description": "Execution outcome. status='achieved' on the primary REQUIRES verdict='pass' on ALL entries.",
+                "$comment": "Stays 'pending' until verification runs. Flip to 'pass' when expected matches observed; 'fail' otherwise with reason in evidence. NEVER leave 'pending' when marking primary as achieved."
+              },
+              "verified_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC ISO 8601 timestamp when verdict was recorded. Absent while verdict='pending'.",
+                "$comment": "Set ONCE when verdict flips from 'pending'. Immutable after."
+              },
+              "evidence": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Observable proof supporting the verdict: reviewer sign-off snippet, checker output, stakeholder approval reference, subagent classification.",
+                "$comment": "Concrete and auditable. Examples for pass: 'advisor approval email dated 2026-06-10', 'APA checker: 0 violations on 24 pages', 'critic verdict=confirmed'. For fail: reason + counter-evidence. Required when verdict != 'pending'."
+              }
+            },
+            "required": ["type", "target", "expected"]
+          }
         }
       },
       "required": ["id", "created_at", "content", "context", "scope", "status"]
@@ -246,6 +353,12 @@
           "description": "Unique identifier across all secondary objectives. Immutable once created.",
           "$comment": "Start at 1, increment globally across all secondary objectives. Never reuse IDs."
         },
+        "parent_main_id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Id of the main objective this secondary serves. Secondaries are a flat list; this links each one to its primary.",
+          "$comment": "Optional (backwards-compat: pre-existing logbooks have a flat list with no link). STOP: one parent per secondary — a secondary that serves two primaries is two secondaries. REDIRECT: this is the structural primary->secondary link only; rule/standard inheritance still flows from the parent's scope, not from here. bad: parent_main_id pointing at a non-existent main id, or a secondary advancing primary 1 carrying parent_main_id 2. good: parent_main_id 2 on a secondary whose content advances main objective 2."
+        },
         "created_at": {
           "type": "string",
           "format": "date-time",
@@ -256,7 +369,7 @@
           "type": "string",
           "maxLength": 180,
           "description": "Specific verifiable outcome that contributes to task completion. Should be completable in a focused work session.",
-          "$comment": "Be granular. Validate: Can this be completed and verified in one session? If not, split into multiple objectives."
+          "$comment": "ONE granular outcome, completable and checkable in a single focused session. STOP: if it contains '+', 'y'/'and', an em-dash, a colon-list, or two verbs, split it into separate secondaries. REDIRECT: the steps to do it (→ this secondary's completion_guide); the rationale (→ the parent main_objective.context). bad: 'Write intro and methods sections, then run them past the editor' (3 concerns) → good: 'Methods section drafted' (the intro and the editor review become their own secondaries)."
         },
         "completion_guide": {
           "type": "array",
@@ -266,7 +379,47 @@
             "maxLength": 200
           },
           "description": "Step-by-step guidance for completing this objective. References documents, examples, standards, or established practices.",
-          "$comment": "Each item should provide actionable guidance. Reference specific documents, sections, examples, or standards. Examples: 'Follow structure from Chapter 1 introduction', 'Use client feedback from meeting notes dated Jan 15', 'Apply APA format for all citations', 'Reference competitor X landing page for layout inspiration'."
+          "$comment": "This is WHERE the how lives — one actionable step per array item, each citing a concrete material, section, example, or standard. STOP: one instruction per item; if an item bundles several actions with '+'/'y'/'and', split it into separate items. REDIRECT: restating the outcome (that is content); the rationale/why (that is the parent's context). bad item: 'Write the section well following best practices and get it reviewed' (vague, multi-step, no anchor) → good items: ['Follow the structure of the Chapter 1 introduction', 'Incorporate client feedback from the Jan 15 meeting notes', 'Apply APA 7th edition for all citations']."
+        },
+        "function_signatures": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 },
+          "description": "Concrete function/method signatures this secondary creates or modifies. Real types — no 'any'/'dynamic'/'Object?'. Optional; omit for doc-only or greenfield-no-API secondaries.",
+          "$comment": "DESIGN SPECIFICATION (design_principle #10). Forces confronting the real API surface at plan time, e.g. 'func (a *App) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd)'. Generics are IN scope but MUST declare explicit type-parameter bounds (no unbounded any/dynamic/Object?/interface{} unless architecturally justified — put the justification in the secondary's content). A generic's correctness lives in its instantiations, so test_cases MUST include one edge_case row per concrete instantiation that matters. An unbounded generic with zero instantiation test_cases is the same blind spot as an unconsidered edge case."
+        },
+        "test_cases": {
+          "type": "array",
+          "description": "Behavioral scenarios this secondary must satisfy: happy paths + edge cases. DESIGN SPEC, not proof. Optional; populate for code-touching secondaries (design_principle #10, product_rule #10).",
+          "$comment": "test_cases SPECIFY behavior at design time and carry NO verdict. The primary's verification_demonstrations PROVE the suite passes (verdict=pass) by REFERENCE — enumerate once here, prove once there, no duplication (product_rule #10). A secondary touching shared state, async, or sibling handlers with ZERO edge_case:true rows is SUSPECT.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 120,
+                "description": "Identifier of the scenario (what is being tested), not of the implementation. e.g. 'paste during active probe', not 'test_handlePaste_1'.",
+                "$comment": "Name the behavior/condition so the row is meaningful before any code exists."
+              },
+              "input": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "Concrete trigger or precondition for the scenario. Optional for cases defined purely by state.",
+                "$comment": "Be concrete: real values/events, e.g. 'PasteMsg arrives while state == probing'. Omit only when the scenario is fully described by name + expected."
+              },
+              "expected": {
+                "type": "string",
+                "maxLength": 300,
+                "description": "The behavioral contract: what MUST happen. For edge_case:true rows this is the forcing function — see $comment.",
+                "$comment": "When edge_case=true and this is EMPTY, the secondary is NOT ready and the logbook is BLOCKED. Filling it requires reading the sibling handlers/code to learn the invariant the new code must preserve. That empty->filled transition is exactly the work that catches relational runtime bugs (design_principle #10)."
+              },
+              "edge_case": {
+                "type": "boolean",
+                "description": "THE forcing-function flag. true = boundary / concurrency / error-recovery / cross-handler-interaction case; false = happy path.",
+                "$comment": "Set true for any scenario at a boundary, under concurrency, on an error/recovery path, or that interacts with sibling handlers/shared state. An edge_case:true row with empty 'expected' blocks the logbook until resolved."
+              }
+            },
+            "required": ["name", "edge_case"]
+          }
         },
         "status": {
           "type": "string",

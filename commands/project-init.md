@@ -5,6 +5,9 @@ allowed-tools: Read, Write, Edit
 
 # Plugin Command: project-init
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
+
 You are executing the waves plugin project initialization command. This is an interactive setup command — do NOT use the Task tool. Conduct this directly in the main thread.
 
 ## Your Role
@@ -37,7 +40,7 @@ Confirm: "✓ Language set to: [language]"
 
 ## Step 1: Check Existing Configuration
 
-Check if `ai_files/user_pref.json` exists.
+Check if `waves_files/user_pref.json` exists.
 
 IF EXISTS, ask in user's language:
 ```
@@ -89,13 +92,14 @@ Ask in user's language:
 ```
 🎯 What type of project is this?
 
-1. Software project - Application, API, system, code
+1. Software project - Application, API, system, code (any language/framework)
 2. General project - Research, business, creative, academic, other
+3. Agentic project - Orchestration of subagents with skills, hooks, tools, state contracts, pipelines (e.g., a Claude Code plugin, a multi-agent data pipeline, an AI ops hub)
 
-Choose 1 or 2:
+Choose 1, 2 or 3:
 ```
 
-Store: `project_type = "software"` (if 1) or `"general"` (if 2)
+Store: `project_type = "software"` (if 1), `"general"` (if 2), or `"agentic"` (if 3)
 
 ## Step 5: Question 3 — Project Familiarity
 
@@ -178,7 +182,7 @@ Output Preferences:
 
 Read the schema from `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/user_pref_schema.json` to understand the structure.
 
-Create `ai_files/user_pref.json` with:
+Create `waves_files/user_pref.json` with:
 - User's answers from questions 1-5
 - Default values for all other fields
 - Proper JSON structure matching the schema
@@ -204,12 +208,12 @@ Waves replaces fixed-cadence methodologies (Scrum sprints) with organic, variabl
 
 ## User Preferences
 
-Read `ai_files/user_pref.json` at session start. Follow the language, tone, and explanation depth configured there.
+Read `waves_files/user_pref.json` at session start. Follow the language, tone, and explanation depth configured there.
 
 ## Directory Structure
 
 ```
-ai_files/
+waves_files/
 ├── user_pref.json              ← Your interaction settings
 ├── project_manifest.json       ← Technical project map
 ├── project_rules.json          ← Coding rules you MUST follow
@@ -246,10 +250,10 @@ Information flows DOWNWARD. Never duplicate detail upward. If you need strategic
 ## How You Must Operate
 
 ### At Session Start
-1. Read `ai_files/user_pref.json` — respect language and tone
-2. Read `ai_files/blueprint.json` — understand what the product IS
-3. Read `ai_files/project_rules.json` — know what rules to follow when writing code
-4. Scan `ai_files/waves/` — identify which wave is active (look for roadmaps with status "active" or "in_progress")
+1. Read `waves_files/user_pref.json` — respect language and tone
+2. Read `waves_files/blueprint.json` — understand what the product IS
+3. Read `waves_files/project_rules.json` — know what rules to follow when writing code
+4. Scan `waves_files/waves/` — identify which wave is active (look for roadmaps with status "active" or "in_progress")
 
 ### Before Any Task
 1. **Check the blueprint exists.** If not → tell the user: "There's no product blueprint. I recommend running `/waves:blueprint-create` before we start building — otherwise I don't have context on what this product is."
@@ -296,6 +300,30 @@ Don't skip steps. If the user asks you to implement code but there's no blueprin
 | `/waves:rules-create` | To extract coding standards from the codebase |
 | `/waves:rules-update` | To refresh rules after code evolution |
 
+## Multi-project Operation (Waves 3.x)
+
+This project may be set up in **multi-project mode** — the parent's `waves_files/` holds company-level governance, and real products live at sibling `projects/<name>/`, each with its own `waves_files/` for its own waves artifacts. Common patterns:
+- **Monorepo:** parent + children share one git; products are subdirs of `projects/` inside the same repo.
+- **Workspace-parent:** parent is your working repo; children reference external products without modifying them.
+- **Ecosystem of independent gits:** parent has `.gitignore /projects/`; each child product is its own cloned git repo inside `projects/<name>/`.
+
+### How to operate in multi-project mode
+
+1. **Detect mode:** if `projects/` exists at repo root with subdirectories, this repo is multi-project.
+2. **Use the `--project <name>` flag** on commands that accept it (blueprint-create, logbook-create/update, objectives-implement, roadmap-create/update, rules-create/update, manifest-create/update, resolution-create). The flag selects which product you operate on; without it, commands operate on the parent (`waves_files/` at repo root).
+3. **Prerequisites are root-only.** Blueprint, roadmap, manifest, rules at the parent's `waves_files/` govern ALL children. Children do not need their own copies. The prereq check for any command reads from `waves_files/<artifact>` (parent), never from `projects/<name>/waves_files/<artifact>` (child).
+4. **Child-specific artifacts (when present)** add on top of parent governance, they do not replace it. For example a child may carry its own `projects/<name>/waves_files/project_rules.json` with additional local rules — parent rules still apply.
+5. **Standalone child sessions:** you can `cd projects/<name>/` and open Claude Code there. From the child's vantage point it is just a normal Waves project (its `waves_files/` is the root). The child's blueprint can declare `parent_blueprint: ../../waves_files/blueprint.json` to inherit company governance.
+
+### Multi-project management commands
+
+- `/waves:projects` — list available scopes
+- `/waves:project-add <name>` — create a new scope
+- `/waves:project-remove <name>` — remove a scope (refuses if active work pending)
+- `/waves:migrate-to-projects` — convert a single-project repo into multi-project structure (intelligent: auto when clear, interactive when ambiguous, --dry-run preview, respects 5-level classification)
+
+If the repo is NOT in multi-project mode, ignore the `--project` flag entirely — commands operate exactly as in pre-3.x single-project mode.
+
 ## What Makes You a Good Waves Agent
 
 - You **read before you act** — blueprint, rules, roadmap, logbook
@@ -321,7 +349,7 @@ Display in user's language:
 ✅ Configuration complete!
 
 📁 Files updated:
-  • ai_files/user_pref.json (created)
+  • waves_files/user_pref.json (created)
   • CLAUDE.md (updated with preferences reference)
 
 Your configuration:
@@ -347,7 +375,7 @@ Display in user's language:
 ✅ Result: User preferences configured and ready to use.
 
 📁 Generated files:
-  • ai_files/user_pref.json
+  • waves_files/user_pref.json
   • CLAUDE.md (updated)
 
 🎯 Next step:

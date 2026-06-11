@@ -3,7 +3,7 @@
   "title": "ProjectDevelopmentRules",
   "description": "Structured catalog of project-wide development rules organized by sections.",
   "type": "object",
-  "required": ["project_name", "project_description", "language", "type", "rules"],
+  "required": ["project_name", "project_description", "language", "rules"],
   "properties": {
     "project_name": {
       "type": "string",
@@ -13,7 +13,7 @@
       "type": "string",
       "maxLength": 1600,
       "description": "Short explanation of the project's purpose and context.",
-      "$comment": "Analyze /ai_files/project_manifest.json to have a better understanding of the project."
+      "$comment": "Analyze /waves_files/project_manifest.json to have a better understanding of the project."
     },
     "language": {
       "type": "string",
@@ -22,8 +22,8 @@
     "type": {
       "type": "string",
       "enum": ["frontend", "backend", "fullstack", "agentic"],
-      "description": "Project scope. Determines which rule sections apply. 'agentic' enables free-form additional categories beyond the canonical set.",
-      "$comment": "frontend/backend/fullstack: traditional software with mature taxonomy — additional rule categories are closed. agentic: orchestration projects with skills, hooks, tools, state contracts and pipelines — additional categories are open so the domain can declare custom categories as patterns emerge. The discrimination is enforced by the conditional allOf at the root."
+      "description": "Project scope. Determines which rule sections apply. 'agentic' enables free-form additional categories beyond the canonical set. OPTIONAL since 3.1: root-level project_rules.json may omit type when it carries only shared rules across multiple scoped projects (Waves multi-project pattern). REQUIRED still in scoped project_rules.json (waves_files/projects/<name>/project_rules.json) — each scope has its own type. Enforcement at command level (logbook-create + rules-create), not schema.",
+      "$comment": "frontend/backend/fullstack: traditional software with mature taxonomy — additional rule categories are closed. agentic: orchestration projects with skills, hooks, tools, state contracts and pipelines — additional categories are open so the domain can declare custom categories as patterns emerge. The discrimination is enforced by the conditional allOf at the root. MULTI-PROJECT (3.1+): when this instance is at waves_files/projects/<name>/project_rules.json, type MUST be present (commands enforce). When at waves_files/project_rules.json acting as shared-rules root, type MAY be omitted. Schema cannot distinguish path semantics — keep type optional here and enforce at command level."
     },
     "rules": {
       "type": "object",
@@ -74,9 +74,10 @@
         "state_contracts":      { "$ref": "#/$defs/ruleList" },
         "pipeline_design":      { "$ref": "#/$defs/ruleList" },
         "governance":           { "$ref": "#/$defs/ruleList" },
-        "budget_and_concurrency": { "$ref": "#/$defs/ruleList" }
+        "budget_and_concurrency": { "$ref": "#/$defs/ruleList" },
+        "verification":         { "$ref": "#/$defs/ruleList" }
       },
-      "$comment": "governing_principles is the universal anchor — first ciudadano de la cadena company_blueprint → ecosystem rules → local rules → logbooks (organizational governance layer, decision #6 of Waves 2.0 roadmap). Available for ALL project types. The 8 agentic-native categories (role_design, skills_management, tool_use, hooks_lifecycle, state_contracts, pipeline_design, governance, budget_and_concurrency) are aligned to Claude Code primitives. unevaluatedProperties behavior depends on project type — see the conditional allOf at the root."
+      "$comment": "governing_principles is the universal anchor — first ciudadano de la cadena company_blueprint → ecosystem rules → local rules → logbooks (organizational governance layer, decision #6 of Waves 2.0 roadmap). Available for ALL project types. The 8 agentic-native categories (role_design, skills_management, tool_use, hooks_lifecycle, state_contracts, pipeline_design, governance, budget_and_concurrency) are aligned to Claude Code primitives. verification is the universal w4 category — governs the verification layer (design_principle #8): stub-check thresholds (e.g., body min-line floor for hooks, word-count floor for general substance-check), evidence-critic opt-ins for general projects, strictness of feasibility-checker (estricto en release_verification + state_change_verification, permissive en otros types). Available for ALL project types (software, agentic, general). unevaluatedProperties behavior depends on project type — see the conditional allOf at the root."
     },
     "ruleList": {
       "type": "array",
@@ -94,7 +95,7 @@
           "type": "integer",
           "minimum": 1,
           "description": "Numeric identifier for the rule (start at 1 and increment by 1).",
-          "$comment": "Stable rule identifier. This field should be created once and not changed."
+          "$comment": "INTEGER from 1, increment. String codes like 'ARCH-001' are a legacy convention and are INVALID here; logbooks reference rules by this integer id (scope.rules). Stable identifier — created once, never changed."
         },
         "created_at": {
           "type": "string",
@@ -111,13 +112,14 @@
         "description": {
           "type": "string",
           "maxLength": 280,
-          "description": "Concise project rule. Must not be overly long or context-dependent."
+          "description": "Concise project rule. Must not be overly long or context-dependent.",
+          "$comment": "STOP: ONE atomic rule per entry, <=280 chars. If you number sub-clauses (1)(2)(3) or paste code examples, those are several rules in disguise: split them. REDIRECT: the why does NOT go here (it goes in the referenced design_principle); do NOT prefix the description with a code like 'ARCH-001:' (the id field already identifies the rule). State it as an imperative or If/then. bad->good: Bad: 'ARCH-001: (1)... (2)... // code example...'. Good: 'If [condition], then [behavior].'"
         },
         "scope": {
           "type": "string",
           "enum": ["ecosystem", "local"],
           "description": "Governance level. ecosystem = identical across all projects in the organization. local = specific to this project.",
-          "$comment": "ecosystem: central governance rule. Should only be modified from the designated source of truth and propagated to all projects. An agent working in a specific project must NOT modify, delete, or rephrase ecosystem rules. local: project-specific rule. The agent can propose, modify, or delete it with /waves:rules-update."
+          "$comment": "MANDATORY on every rule. If unsure, default 'local'. Omitting it breaks the ecosystem-vs-local governance split. ecosystem: central governance rule. Should only be modified from the designated source of truth and propagated to all projects. An agent working in a specific project must NOT modify, delete, or rephrase ecosystem rules. local: project-specific rule. The agent can propose, modify, or delete it with /waves:rules-update."
         }
       },
       "$comment": "When creating a rule: - Must apply the YAGNI principle to avoid overengineering. - Avoid creating rules for hypothetical scenarios or future features that may never be implemented. Focus on current project needs and avoid unnecessary complexity. When scope is ecosystem, the rule must be identical across all project_rules.json in the organization. When scope is local, the rule only exists in the project where it was created."

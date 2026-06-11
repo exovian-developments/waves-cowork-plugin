@@ -146,7 +146,7 @@
     "products": {
       "type": "array",
       "description": "¿Qué productos o servicios construye la empresa? Each product has its own product_blueprint.json with full detail. This section is the INDEX — it links products to company capabilities.",
-      "$comment": "Each entry is a pointer to a product, not the product definition itself. The product_blueprint.json in each project's ai_files/ has the full detail. This array answers: what products exist, which company capabilities they serve, and what's their current status. If a product can't trace to a strategic_capability, it may not be aligned with company strategy.",
+      "$comment": "Each entry is a pointer to a product, not the product definition itself. The product_blueprint.json in each project's waves_files/ has the full detail. This array answers: what products exist, which company capabilities they serve, and what's their current status. If a product can't trace to a strategic_capability, it may not be aligned with company strategy.",
       "items": {
         "$ref": "#/$defs/product_ref"
       }
@@ -155,7 +155,7 @@
     "operational_areas": {
       "type": "array",
       "description": "¿Qué áreas de la empresa NO son productos pero son necesarias para funcionar? Legal, finanzas, marketing, administración, recursos humanos — todo lo que mantiene la empresa viva pero no es un producto que vendes.",
-      "$comment": "Each area can have its own roadmaps for tracking tasks and deadlines. Example: 'Legal' might have a roadmap with milestones like 'Register trademark', 'File annual report', 'Renew business permit'. These roadmaps follow the same Waves structure (waves/wN/roadmap.json) but live in the company's operational repository or in a dedicated ai_files/ structure.",
+      "$comment": "Each area can have its own roadmaps for tracking tasks and deadlines. Example: 'Legal' might have a roadmap with milestones like 'Register trademark', 'File annual report', 'Renew business permit'. These roadmaps follow the same Waves structure (waves/wN/roadmap.json) but live in the company's operational repository or in a dedicated waves_files/ structure.",
       "items": {
         "$ref": "#/$defs/operational_area"
       }
@@ -383,7 +383,7 @@
     "product_ref": {
       "type": "object",
       "description": "A pointer to a product the company builds or operates.",
-      "$comment": "The full product definition lives in the product's own ai_files/blueprint.json. This is just the reference that connects it to the company strategy.",
+      "$comment": "The full product definition lives in the product's own waves_files/blueprint.json. This is just the reference that connects it to the company strategy.",
       "properties": {
         "codename": {
           "type": "string",
@@ -395,8 +395,8 @@
         },
         "blueprint_path": {
           "type": "string",
-          "description": "Where to find the product's blueprint. Use portable format: org/repo::ai_files/blueprint.json",
-          "$comment": "For products in the same GitHub org, use: org/repo::ai_files/blueprint.json. ECC resolves this via GitHub API."
+          "description": "Where to find the product's blueprint. Use portable format: org/repo::waves_files/blueprint.json",
+          "$comment": "For products in the same GitHub org, use: org/repo::waves_files/blueprint.json. ECC resolves this via GitHub API."
         },
         "status": {
           "type": "string",

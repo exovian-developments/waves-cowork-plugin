@@ -32,6 +32,15 @@ if echo "$FIRST_LINE" | grep -qE 'git[[:space:]]+tag[[:space:]]+(-d|-l|--delete|
     exit 0
 fi
 
+# --- Usage telemetry self-log (w6 Phase 7) — fired = a real version-tag check ---
+# Bulletproof: never alters this hook's exit code or aborts it. One EXIT trap
+# captures the exit-2 block path. Placed AFTER the early-exit guards so "fired"
+# means doc-sync actually evaluated a release tag, not every Bash call.
+SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // "default"' 2>/dev/null | tr '/ ' '__'); export SESSION_ID
+__waves_tlm() { bash "${CLAUDE_PLUGIN_ROOT}/hooks/waves-telemetry.sh" emit hooks waves-doc-sync "$1" 2>/dev/null || true; }
+__waves_tlm fired
+trap '__waves_rc=$?; [ "$__waves_rc" -eq 2 ] 2>/dev/null && __waves_tlm blocked; true' EXIT
+
 # Bypass file present? Single-use, auto-deleted, audit-logged.
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 BYPASS="$PROJECT_DIR/.claude/waves-doc-sync-bypass"

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Waves Correctness Gate Schema",
+  "description": "Structured report from a correctness gate: full-context reviewers (correctness, silent-failure, cross-consistency, plus coverage-gap at post_impl only), each paired with verifier B. Covers BOTH boundaries via the 'boundary' field — post_plan (logbook-create Step A7: 3 reviewers, concrete plan vs real codebase) and post_impl (objectives-implement Step 9.8: 4 reviewers, integrated diff vs assembled system). One schema, not two: the report shape is identical, only the boundary and the input differ (DRY — product_rule #10 + REGLA-0 #3).",
+  "$comment": "CANONICAL SHAPE: object with keys boundary, target, reviewed_at, model, summary, findings. OPEN (never additionalProperties:false, design_principle #11). STOP: one gate run per file (one boundary value). REDIRECT: the code fixes go in the logbook recent_context + the diff, NOT here; this is the read-only finding+classification record (design_principle #11 — analyses are persisted, mineable). An undeclared sibling field is the signal you are writing the wrong artifact. bad: merging a post_plan run and a post_impl run into one file. good: boundary 'post_plan', findings[] each with a reviewer axis + a verifier-B classification.",
+  "type": "object",
+  "properties": {
+    "boundary": { "type": "string", "enum": ["post_plan", "post_impl"], "description": "Which gate produced this report: post_plan (A7) or post_impl (Step 9.8)." },
+    "target": { "type": "string", "description": "What was reviewed: the logbook path (post_plan) or the diff range base..head (post_impl)." },
+    "reviewed_at": { "type": "string", "format": "date-time", "description": "UTC timestamp of the gate run." },
+    "model": { "type": "string", "description": "Model or agent that produced the review." },
+    "summary": {
+      "type": "object",
+      "description": "Verifier-B verdict tally for quick reading; full detail is in findings.",
+      "properties": {
+        "confirmed": { "type": "integer", "minimum": 0 },
+        "smoke": { "type": "integer", "minimum": 0 },
+        "unverifiable": { "type": "integer", "minimum": 0 },
+        "gold": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "One entry per finding. An empty array means the gate found nothing actionable — UNLESS degraded is true (then the absence of findings from a fallen lens means 'not reviewed', not 'clean').",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "degraded": { "type": "boolean", "description": "True when one or more lenses (or their verifier B) fell during this gate run — the report's coverage claim is partial, never to be read as full coverage." },
+    "fallen_lenses": { "type": "array", "items": { "type": "string" }, "description": "Names of the lenses that fell when degraded:true." }
+  },
+  "required": ["boundary", "target", "reviewed_at", "findings"],
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "description": "One correctness finding from a reviewer, carrying its verifier-B classification.",
+      "$comment": "STOP: one issue per finding, cite file:line. REDIRECT: the applied fix → logbook recent_context; the test that proves it fixed → the primary's verification_demonstrations; do NOT put remediation code here. The verifier B classifies, never vetoes. bad: a finding with no file:line and no classification. good: axis 'silent_failure', file 'state.go', line 42, classification 'confirmed'.",
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "axis": { "type": "string", "enum": ["correctness", "silent_failure", "cross_consistency", "coverage_gap"], "description": "Which gate reviewer surfaced this finding (coverage_gap exists only at boundary post_impl)." },
+        "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"], "description": "Reviewer severity scale — matches the agents' finding structure (critical = wrong result or destructive action on a common path)." },
+        "file": { "type": "string", "description": "Path of the file the finding cites." },
+        "line": { "type": ["integer", "null"], "description": "Line number, or null for a file/range-level finding." },
+        "issue": { "type": "string", "description": "Concise description with citation." },
+        "classification": { "type": "string", "enum": ["confirmed", "smoke", "unverifiable", "gold"], "description": "Verifier-B classification (A->B pattern, design_principle #7). Classifies, never vetoes." }
+      },
+      "required": ["id", "axis", "issue", "classification"]
+    }
+  }
+}

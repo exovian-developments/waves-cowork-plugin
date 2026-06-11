@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Waves Integrity Audit Schema",
+  "description": "Structured report produced by the logbook integrity reviewer (logbook-create Step A6). One per audit run, persisted alongside the logbook so the second-order corpus miner (w6 Phase 5) can read it across logbooks/projects.",
+  "$comment": "CANONICAL SHAPE: a single object with keys logbook_path, audited_at, model, summary, findings. OPEN (never additionalProperties:false, design_principle #11) — a recurring extra key is a signal for the corpus miner, not an error. STOP: one audit run per file (the reviewer overwrites on re-audit; copy first if history is needed). REDIRECT: the fixes the main agent applied go in the logbook's recent_context, NOT here — this file is the read-only finding record. An undeclared sibling field is the signal you are writing the wrong artifact. bad: adding an 'applied_fixes' array here (that belongs in the logbook). good: summary {critical, warning} + findings[] each citing primary_id/secondary_id.",
+  "type": "object",
+  "properties": {
+    "logbook_path": { "type": "string", "description": "Repo-relative or absolute path of the audited logbook." },
+    "audited_at": { "type": "string", "format": "date-time", "description": "UTC timestamp of the audit run." },
+    "model": { "type": "string", "description": "Model or agent that produced the audit." },
+    "summary": {
+      "type": "object",
+      "description": "Compact counts for quick reading; full detail is in findings.",
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "warning": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["critical", "warning"]
+    },
+    "findings": {
+      "type": "array",
+      "description": "One entry per finding. An empty array means the logbook passed clean.",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "required": ["logbook_path", "audited_at", "summary", "findings"],
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "description": "A single integrity finding against the logbook.",
+      "$comment": "STOP: one issue per finding — cite the structural element (primary id, secondary id). REDIRECT: the fix narrative belongs in the logbook recent_context, not in `message`; do not bundle unrelated omissions. bad: one finding listing three different missing-rule problems. good: one category + one location + one cited message + one suggested_action.",
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "severity": { "type": "string", "enum": ["critical", "warning"], "description": "Only these two. If it does not reach 'warning', omit it." },
+        "category": { "type": "string", "description": "Finding category, e.g. missing_rules_in_primary, coverage_gap, decomposition_mismatch, edge_case_empty_expected." },
+        "location": {
+          "type": "object",
+          "description": "Structural location of the finding.",
+          "properties": {
+            "primary_id": { "type": ["integer", "null"] },
+            "secondary_id": { "type": ["integer", "null"] }
+          }
+        },
+        "message": { "type": "string", "description": "One-paragraph explanation with structural citation." },
+        "suggested_action": { "type": "string", "description": "Textual suggestion; do NOT prescribe exact JSON edits — the main agent decides how to apply." }
+      },
+      "required": ["id", "severity", "category", "message"]
+    }
+  }
+}

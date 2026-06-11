@@ -27,6 +27,12 @@ claude plugin install exovian-developments/waves-cowork-plugin
 
 Download `waves.plugin` from [Releases](https://github.com/exovian-developments/waves-cowork-plugin/releases) and open it in Claude Desktop.
 
+## What's new in 3.1
+
+- **waves_kernel** — every deterministic rail (validation, gate evaluation, stub detection, artifact merge, relations queries) extracted into a self-contained AGPL CLI (`kernel/`). Products embed it by copying the directory.
+- **Collaboration substrate** — `waves-merge`, a git merge driver for Waves artifacts (per-field merge, union-by-id, per-field last-write-wins: two people editing the same artifact on branches never see `<<<<<<<`), plus a `pre-commit` backstop that validates staged artifacts from ANY editing surface with delta semantics (only NEW errors block).
+- **`waves_files/`** — the artifacts directory has a brand-prefixed canonical name (formerly `ai_files/`, still recognized as fallback). `/waves:upgrade` is the single door: it detects any older layout and chains every migration needed, idempotently.
+
 ## What it does
 
 Waves gives Claude the complete product lifecycle:

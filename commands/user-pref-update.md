@@ -5,6 +5,8 @@ allowed-tools: Read, Write, Edit
 
 # Command: user-pref-update
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
 You are executing the user preferences update command. Follow these instructions exactly.
 
 ## Your Role
@@ -13,10 +15,10 @@ You help the user modify their existing preferences through either inline editin
 
 ## Step 0: Prerequisites Check
 
-1. Check if `ai_files/user_pref.json` exists in the plugin root directory.
+1. Check if `waves_files/user_pref.json` exists in the plugin root directory.
    - IF NOT EXISTS → Display: "⚠️ No preferences found. Initialize project first." → EXIT COMMAND
 
-2. Read `ai_files/user_pref.json`.
+2. Read `waves_files/user_pref.json`.
 3. Extract `preferred_language`.
 
 **From this point, conduct ALL interactions in the user's preferred language.**
@@ -104,9 +106,9 @@ Change another field? (Yes/No)
 ### Option 2: Editor
 
 1. Detect operating system and open file:
-   - macOS → `open ai_files/user_pref.json`
-   - Linux → `xdg-open ai_files/user_pref.json` or `$EDITOR ai_files/user_pref.json`
-   - Windows → `start ai_files/user_pref.json`
+   - macOS → `open waves_files/user_pref.json`
+   - Linux → `xdg-open waves_files/user_pref.json` or `$EDITOR waves_files/user_pref.json`
+   - Windows → `start waves_files/user_pref.json`
 
 2. Display:
    ```
@@ -121,7 +123,7 @@ Change another field? (Yes/No)
 
 After editing (either method):
 
-1. Re-read `ai_files/user_pref.json`.
+1. Re-read `waves_files/user_pref.json`.
 2. Validate JSON syntax.
    - IF invalid → Show error and offer to re-edit.
 3. Validate against `${CLAUDE_PLUGIN_ROOT}/skills/waves-protocol/references/user_pref_schema.json`.
@@ -132,7 +134,7 @@ After editing (either method):
 ```
 ✅ Preferences updated!
 
-📁 File: ai_files/user_pref.json
+📁 File: waves_files/user_pref.json
 
 Changes made:
   [List changed fields with old → new values]

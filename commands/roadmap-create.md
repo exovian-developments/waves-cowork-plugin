@@ -5,7 +5,30 @@ allowed-tools: Read, Grep, Glob, Bash(git:*), Task
 
 # Plugin Command: roadmap-create
 
+> **Artifacts directory:** `waves_files/` is the canonical Waves artifacts directory (v3.1+). On an unmigrated project — no `waves_files/` but `ai_files/` exists — read every `waves_files/` path in this command as `ai_files/`, and suggest running `/waves:upgrade` once.
+
+
 You are executing the waves plugin roadmap creation command. This is an interactive orchestrator that gathers project context and delegates heavy analysis to the roadmap-orchestrator agent.
+
+## Multi-project scope
+
+Apply the **Multi-project Path Resolution** helper from `plugin/skills/waves-protocol/SKILL.md` before any other step:
+
+- Parse `--project <name>` from the command arguments.
+- If present: set `base_path = projects/<name>/waves_files/` and validate that projects/<name>/ exists (abort with a "scope not found" error if it does not).
+- If absent: set `base_path = waves_files/` (backwards-compatible default — identical to pre-3.x single-project behavior).
+
+Use `base_path` for every `waves_files/...` reference in the steps below. When the steps say `waves_files/<artifact>` they mean `<base_path><artifact>` in multi-project mode.
+
+When `--project` is present, also write the **session marker** via bash BEFORE any artifact operation — this is what makes the active scope visible to hooks (`plugin/hooks/_lib/scope-resolve.sh`) when they fire on subsequent Edit/Write:
+
+```bash
+mkdir -p "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}"
+printf '%s=%s\n' "$(printf '%s' "$PWD" | { md5 -q 2>/dev/null || md5sum | awk '{print $1}'; })" "<scope_name>" \
+  > "${CLAUDE_PLUGIN_DATA}/markers/${CLAUDE_SESSION_ID:-default}/active-scope"
+```
+
+Idempotent (overwrite-safe). The marker maps `<cwd_md5>=<scope_name>` so a session that traverses multiple cwds keeps one line per cwd. When `--project` is absent, **do not write** the marker — hooks fall back to root naturally.
 
 ## Your Role
 
@@ -13,11 +36,13 @@ You are the main orchestrator for roadmap creation. Keep this thread lean — co
 
 ## Step 1: Check Prerequisites
 
+**Multi-project note (root-only validation):** prerequisite artifacts (`user_pref.json`, `project_manifest.json`, `project_rules.json`, plus any required blueprint) are validated at root (`waves_files/<artifact>`) regardless of whether the `--project <name>` flag is set. Scopes inherit root prerequisites. If a root prerequisite is missing in multi-project mode, abort with a message pointing to root setup (e.g., "Run /waves:project-init at root first — multi-project scopes inherit root prerequisites.") — NEVER to a per-scope path. The `base_path` from the Multi-project scope helper applies to WORK artifacts (logbooks, scoped rules/manifest/blueprint), not to prerequisite existence checks.
+
 Verify user preferences and project structure exist:
 
 ```bash
-test -f ai_files/user_pref.json && echo "✓ User preferences found" || echo "✗ Missing ai_files/user_pref.json"
-test -f ai_files/project_manifest.json && echo "✓ Project manifest found" || echo "⚠ No manifest (optional)"
+test -f waves_files/user_pref.json && echo "✓ User preferences found" || echo "✗ Missing waves_files/user_pref.json"
+test -f waves_files/project_manifest.json && echo "✓ Project manifest found" || echo "⚠ No manifest (optional)"
 ```
 
 If user_pref.json doesn't exist:
@@ -28,9 +53,9 @@ If user_pref.json doesn't exist:
 ## Step 2: Detect Project Context
 
 Scan for:
-- `ai_files/project_manifest.json` (primary context)
-- `ai_files/project_rules.json` (constraints)
-- `ai_files/project_standards.json` (standards and conventions)
+- `waves_files/project_manifest.json` (primary context)
+- `waves_files/project_rules.json` (constraints)
+- `waves_files/project_standards.json` (standards and conventions)
 
 Read each file if present and summarize findings:
 ```
@@ -202,20 +227,20 @@ Apply timestamps to the roadmap JSON:
 - `last_updated`: Current UTC timestamp (ISO 8601)
 
 Construct output path using wave convention:
-- List `ai_files/waves/` directory to find existing wave directories
-- If none exist AND `ai_files/feasibility.json` or `ai_files/foundation.json` exist: suggest `sub-zero`
+- List `waves_files/waves/` directory to find existing wave directories
+- If none exist AND `waves_files/feasibility.json` or `waves_files/foundation.json` exist: suggest `sub-zero`
 - If none exist AND no feasibility/foundation: use `w0` (foundation wave — agnostic capabilities)
 - If `sub-zero` exists but no `w0`: suggest `w0`
 - If `w0` exists but no `w1`: suggest `w1`
 - If `wN` exists: suggest `w[N+1]` (increment from highest existing)
 - Ask user to confirm wave name
-- Create directory `ai_files/waves/[wave_name]/` if it doesn't exist
+- Create directory `waves_files/waves/[wave_name]/` if it doesn't exist
 
 ```
-ai_files/waves/[wave_name]/roadmap.json
+waves_files/waves/[wave_name]/roadmap.json
 ```
 
-Example: `ai_files/waves/sub-zero/roadmap.json`, `ai_files/waves/w0/roadmap.json`, `ai_files/waves/w1/roadmap.json`
+Example: `waves_files/waves/sub-zero/roadmap.json`, `waves_files/waves/w0/roadmap.json`, `waves_files/waves/w1/roadmap.json`
 
 Wave types:
 - sub-zero = Initial feasibility/foundation setup
@@ -224,8 +249,8 @@ Wave types:
 
 Write the roadmap JSON to the file.
 
-**Prepend** a reference to `product_roadmaps` in `ai_files/blueprint.json` (if blueprint exists):
-- Read `ai_files/blueprint.json`
+**Prepend** a reference to `product_roadmaps` in `waves_files/blueprint.json` (if blueprint exists):
+- Read `waves_files/blueprint.json`
 - If `product_roadmaps` array does not exist, create it as empty array first
 - Prepend (insert at index 0) a new entry: `{"wave": "[wave_name]", "path": "waves/[wave_name]/roadmap.json"}`
 - Write the updated blueprint back
@@ -238,7 +263,7 @@ Display:
 ```
 ✅ Roadmap created successfully!
 
-📄 File: ai_files/waves/{wave_name}/roadmap.json
+📄 File: waves_files/waves/{wave_name}/roadmap.json
 
 Next steps:
   • Use `roadmap-update` to track progress
@@ -280,7 +305,7 @@ Path: {path}
 Error: {error}
 
 Try:
-1. Ensure ai_files/ directory exists
+1. Ensure waves_files/ directory exists
 2. Check file permissions
 3. Use a different filename
 ```
