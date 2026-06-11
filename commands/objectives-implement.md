@@ -805,6 +805,8 @@ Then proceed to Step 9 (or loop back to Step 5 per the smoke branch).
 
 **This step is mandatory after each objective completion.** The logbook must be updated in real-time so that if the session ends unexpectedly, progress is preserved.
 
+**Use the Edit/Write TOOLS for every logbook status change — never bash/jq/python.** The framework's sensors are PostToolUse[Edit|Write] hooks: metacognition triggers, the Layer C rules audit, doc-enforce, and the COST ODOMETER (the per-primary cost.json) all detect completion by watching these tool events. A status flip applied through a bash script is INVISIBLE to all of them — the logbook looks updated but no [AUTO] roadmap note lands, no audit fires, and the primary's cost is silently never recorded (field bug, 2026-06-11). Large structural artifact edits via scripts are fine for OTHER files; the logbook's `status` transitions must go through Edit.
+
 ```
 📋 Updating logbook...
 ```

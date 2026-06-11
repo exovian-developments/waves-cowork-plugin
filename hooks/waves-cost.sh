@@ -62,7 +62,12 @@ if [ "$ACHIEVED" -le "$LAST_COUNT" ]; then exit 0; fi
 # fall back to CLAUDE_PROJECT_DIR + session_id (verified robust, Phase-7 lesson). ---
 TRANSCRIPT=$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
 if [ -z "$TRANSCRIPT" ] || [ ! -f "$TRANSCRIPT" ]; then
-  ENC=$(printf '%s' "$PROJECT_DIR" | sed 's#/#-#g')
+  # Claude Code's transcript-dir encoding replaces EVERY non-alphanumeric char
+  # with '-' (verified: .../projects_control_center_local lives at
+  # .../-Users-...-projects-control-center-local). A slash-only sed broke the
+  # fallback for any project with underscores in its path — the cost hook then
+  # exited silently and no cost.json was ever written (field bug, 2026-06-11).
+  ENC=$(printf '%s' "$PROJECT_DIR" | sed 's#[^A-Za-z0-9]#-#g')
   TRANSCRIPT="$HOME/.claude/projects/$ENC/$SESSION_ID.jsonl"
 fi
 [ -f "$TRANSCRIPT" ] || exit 0
@@ -161,9 +166,11 @@ printf '%s' "$EXISTING" | jq \
     generated_at: $ts, waves_version: $wv, currency: "USD", pricing_ref: $pref,
     per_primary: $pp, total: { tokens: $tt, usd: $tu }
   }
-' > "$COST.tmp" 2>/dev/null && mv "$COST.tmp" "$COST" 2>/dev/null
+' > "$COST.tmp" 2>/dev/null && mv "$COST.tmp" "$COST" 2>/dev/null || exit 0
 
-# --- Advance the odometer checkpoint ---
+# --- Advance the odometer checkpoint — ONLY after the write landed. ---
+# Advancing on a failed write would silently swallow this primary's cost AND
+# corrupt the next delta (the odometer would skip the unrecorded distance).
 printf '%s' "$ACC" > "$ACC_MARK" 2>/dev/null
 printf '%s' "$ACHIEVED" > "$COUNT_MARK" 2>/dev/null
 
