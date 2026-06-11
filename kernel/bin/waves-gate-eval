@@ -68,7 +68,7 @@ else
 fi
 
 # --- Framework self-operations: the kernel's own bins are always allowed ---
-# (field report 2026-06-10: the gate blocked waves-validate during legitimate
+# (field report 2026-06-10: the gate blocked waves-artifact-validate during legitimate
 # framework work). A bash invocation that references kernel/bin/waves- is the
 # framework operating on itself, in ANY gate mode.
 if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then

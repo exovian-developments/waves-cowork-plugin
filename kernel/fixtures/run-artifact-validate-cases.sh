@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-validate-cases.sh — cases for the waves-validate rail (w6 post-release,
+# run-artifact-validate-cases.sh — cases for the waves-artifact-validate rail (w6 post-release,
 # upstream report from projects_control_center_local 2026-06-11).
 #
 # Cases:
@@ -15,7 +15,7 @@
 
 set -uo pipefail
 
-BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/waves-validate"
+BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/waves-artifact-validate"
 
 FAILURES=0
 fail() { echo "FAIL [$1]: $2" >&2; FAILURES=$((FAILURES+1)); }
@@ -79,7 +79,7 @@ else
 fi
 
 if [ "$FAILURES" -gt 0 ]; then
-  echo "run-validate-cases: $FAILURES case(s) failed" >&2
+  echo "run-artifact-validate-cases: $FAILURES case(s) failed" >&2
   exit 1
 fi
-echo "run-validate-cases: all 5 cases passed"
+echo "run-artifact-validate-cases: all 5 cases passed"

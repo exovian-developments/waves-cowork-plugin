@@ -8,7 +8,7 @@
 #   1. Lists STAGED files under waves_files/ or ai_files/ matching *.json.
 #   2. Every staged artifact must be well-formed JSON — malformed blocks.
 #   3. Artifacts with a known schema (roadmap/logbook/blueprint) are validated
-#      with waves-validate using DELTA semantics: the commit is blocked only if
+#      with waves-artifact-validate using DELTA semantics: the commit is blocked only if
 #      the staged version introduces NEW schema errors compared to the HEAD
 #      version of the same file. Pre-existing (legacy) errors are reported as
 #      warnings and do NOT block — historical artifacts are immutable by
@@ -44,7 +44,7 @@ command -v jq &>/dev/null || {
 }
 git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
-VALIDATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/waves-validate"
+VALIDATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/waves-artifact-validate"
 
 # --- Staged Waves artifacts only ---
 STAGED=$(git -C "$REPO" diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
@@ -77,7 +77,7 @@ resolve_schema() {
 
 # validation_errors <json-file> <schema-file> → error lines on stdout (empty = valid)
 validation_errors() {
-  bash "$VALIDATE" "$1" --schema "$2" 2>&1 >/dev/null | grep -v '^waves-validate: WARNING' || true
+  bash "$VALIDATE" "$1" --schema "$2" 2>&1 >/dev/null | grep -v '^waves-artifact-validate: WARNING' || true
 }
 
 BLOCKED=0
