@@ -132,7 +132,14 @@ ENTRY=$(jq -n \
            + $d.cache_creation/1000000*$r.cache_creation + $d.cache_read/1000000*$r.cache_read) ]
         | add // 0 | .*10000 | round / 10000 )
     end ) as $usd |
-  { primary_id: ($pid|tonumber), tokens: $tok, usd: $usd }
+  # Freeze the rates actually applied (per model in the delta) so the reader can
+  # verify the usd with simple math: tokens · rates / 1e6 (owner request, DW
+  # cost-rates-in-costjson). Units: usd_per_mtok.
+  ( if ($rates|length)==0 then {} else
+      ( reduce ($delta | keys[]) as $m ({};
+          . + { ($m): ($rates[$m] // $rates[$price.default_model] // {}) }) )
+    end ) as $used_rates |
+  { primary_id: ($pid|tonumber), tokens: $tok, usd: $usd, rates: $used_rates }
 ' 2>/dev/null)
 [ -n "$ENTRY" ] || exit 0
 
@@ -153,6 +160,10 @@ printf '%s' "$EXISTING" | jq \
   --argjson entry "$ENTRY" --arg label "$LABEL" --arg ts "$TS" \
   --arg wv "$WAVES_VERSION" --arg pref "$PRICING_REF" --arg unit "$UNIT" '
   ($entry + {label:$label}) as $e |
+  # per_primary entries do not repeat the rates; they live once at top level
+  # (merged across sessions/models — a later session may add a new model).
+  ( (.rates // {}) + ($e.rates // {}) ) as $all_rates |
+  ($e | del(.rates)) as $e |
   ( (.per_primary // []) | map(select(.primary_id != $e.primary_id)) + (if $unit=="diverged_work" then [] else [$e] end)
     | sort_by(.primary_id) ) as $pp |
   ( if $unit=="diverged_work" then $e.tokens else
@@ -164,6 +175,7 @@ printf '%s' "$EXISTING" | jq \
     else null end ) as $tu |
   {
     generated_at: $ts, waves_version: $wv, currency: "USD", pricing_ref: $pref,
+    rates: $all_rates,
     per_primary: $pp, total: { tokens: $tt, usd: $tu }
   }
 ' > "$COST.tmp" 2>/dev/null && mv "$COST.tmp" "$COST" 2>/dev/null || exit 0
