@@ -67,6 +67,15 @@ else
   COOLDOWN_FILE=""
 fi
 
+# _normalize_cmd: strip leading VAR=value assignments and an opening $( so the
+# REAL command is what gets matched (field report: VERSION=$(jq ...) — a pure
+# read — blocked under pending because the first word was 'VERSION=...').
+# Conservative by construction: only simple `VAR=token ` prefixes are dropped;
+# a mutating payload after them still surfaces as the first word and blocks.
+_normalize_cmd() {
+  printf '%s' "$1" | sed -E 's/^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^ $(]* +)*//; s/^[A-Za-z_][A-Za-z0-9_]*=\$\(//; s/^\$\(//'
+}
+
 # --- Framework self-operations: the kernel's own bins are always allowed ---
 # (field report 2026-06-10: the gate blocked waves-artifact-validate during legitimate
 # framework work). A bash invocation that references kernel/bin/waves- is the
@@ -104,7 +113,7 @@ if [ -n "$PENDING_FILE" ] && [ -f "$PENDING_FILE" ]; then
   fi
   # Allow read-only Bash + marker cleanup
   if [ "$TOOL_NAME" = "Bash" ]; then
-    FIRST_CHECK=$(echo "$COMMAND" | head -1 | sed 's/^[[:space:]]*//' | cut -d' ' -f1)
+    FIRST_CHECK=$(_normalize_cmd "$(echo "$COMMAND" | head -1)" | sed 's/^[[:space:]]*//' | cut -d' ' -f1)
     case "$FIRST_CHECK" in
       ls|cat|head|tail|grep|rg|find|tree|git|wc|echo|pwd|jq|diff)
         echo '{}'
@@ -168,7 +177,7 @@ fi
 # --- Whitelist: read-only Bash commands are always allowed ---
 if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
   # Extract the first word/command from the Bash command (first line only — heredocs have newlines)
-  FIRST_LINE=$(echo "$COMMAND" | head -1)
+  FIRST_LINE=$(_normalize_cmd "$(echo "$COMMAND" | head -1)")
   FIRST_CMD=$(echo "$FIRST_LINE" | sed 's/^[[:space:]]*//' | cut -d' ' -f1 | cut -d'/' -f1)
 
   # Read-only commands that never modify state

@@ -36,9 +36,11 @@ INPUT=$(cat 2>/dev/null) || exit 0
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -z "$COMMAND" ] && { echo '{}'; exit 0; }
 
-# --- S2: trigger only on a real `git commit` (not amend-less listing, not dry-run) ---
+# --- S2: trigger on the boundaries where code LANDS (w6 Phase 14, sec 5) ---
+# Not just `git commit`: a PR-branch workflow crosses the boundary at merge/pull
+# (field finding: pcc_local merges never fired Flow C). Also tolerate `git -C`.
 FIRST_LINE=$(printf '%s' "$COMMAND" | head -1)
-if ! printf '%s' "$FIRST_LINE" | grep -qE '(^|[[:space:]]|&&|;)git[[:space:]]+commit([[:space:]]|$)'; then
+if ! printf '%s' "$FIRST_LINE" | grep -qE '(^|[[:space:]]|&&|;)(git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?(commit|merge|pull)([[:space:]]|$)|gh[[:space:]]+pr[[:space:]]+merge)'; then
   echo '{}'; exit 0
 fi
 # Skip a dry-run commit (no SHA is produced)
@@ -57,11 +59,25 @@ SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // "default"' 2>/dev/null
 export SESSION_ID
 source "${CLAUDE_PLUGIN_ROOT}/hooks/_lib/scope-resolve.sh" 2>/dev/null || true
 
-# --- SHA-resolve: HEAD is the just-created commit. Get its changed files. ---
-# (Reuses the doc-sync resolve pattern: git show --name-only on the resolved SHA.)
-RESOLVED=$(cd "$PROJECT_DIR" 2>/dev/null && git rev-parse HEAD 2>/dev/null || echo "")
+# --- Resolve the REPO where the commit actually landed (w6 Phase 14, sec 5) ---
+# Root cause (a): reading HEAD of $CLAUDE_PROJECT_DIR is blind to CHILD repos
+# under projects/* with their own git. Resolution order: explicit `git -C
+# <path>` in the command > the hook payload's cwd > PROJECT_DIR; then walk to
+# the repo toplevel. Root cause (c): the md5(cwd) scope marker is NOT used for
+# locating the manifest anymore — the resolved repo root is.
+GITC=$(printf '%s' "$FIRST_LINE" | sed -n 's/.*git[[:space:]]\{1,\}-C[[:space:]]\{1,\}\([^[:space:]]\{1,\}\).*/\1/p')
+HOOK_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+REPO_HINT="${GITC:-${HOOK_CWD:-$PROJECT_DIR}}"
+REPO_ROOT=$(git -C "$REPO_HINT" rev-parse --show-toplevel 2>/dev/null || echo "")
+[ -z "$REPO_ROOT" ] && REPO_ROOT=$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null || echo "")
+[ -z "$REPO_ROOT" ] && { echo '{}'; exit 0; }
+
+# --- SHA-resolve: HEAD of the RESOLVED repo. First-parent diff covers merge
+# commits too (git show --name-only is empty on merges).
+RESOLVED=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")
 [ -z "$RESOLVED" ] && { echo '{}'; exit 0; }
-CHANGED=$(cd "$PROJECT_DIR" 2>/dev/null && git show --name-only --format="" "$RESOLVED" 2>/dev/null | grep -v '^$' || echo "")
+CHANGED=$(git -C "$REPO_ROOT" diff --name-only "${RESOLVED}^1" "$RESOLVED" 2>/dev/null | grep -v '^$' || true)
+[ -z "$CHANGED" ] && CHANGED=$(git -C "$REPO_ROOT" show --name-only --format="" "$RESOLVED" 2>/dev/null | grep -v '^$' || echo "")
 [ -z "$CHANGED" ] && { echo '{}'; exit 0; }
 
 # --- S3: ZERO-TOKEN deterministic pre-filter. The manifest maps CODE only. ---
@@ -92,9 +108,11 @@ fi
 # deep). The WHY of the change is read from the Waves artifact co-committed in
 # the SAME diff (logbook/roadmap/diverged_work), NOT the commit message.
 
-# Locate the manifest to refresh (scope-aware)
+# Locate the manifest to refresh: the RESOLVED repo's own first (covers child
+# repos regardless of scope markers), then the classic scope fallbacks.
 MANIFEST=""
-for m in "$AI_FILES_SCOPED/project_manifest.json" "$AI_FILES_ROOT/project_manifest.json"; do
+for m in "$REPO_ROOT/waves_files/project_manifest.json" "$REPO_ROOT/ai_files/project_manifest.json" \
+         "$AI_FILES_SCOPED/project_manifest.json" "$AI_FILES_ROOT/project_manifest.json"; do
   [ -f "$m" ] && MANIFEST="$m" && break
 done
 

@@ -233,9 +233,15 @@ Repeat until objectives are clear enough.
 
 Read `project_type` from user_pref.json:
 
-IF `project_type === "software"` → Go to **FLOW A: SOFTWARE**
-IF `project_type === "general"` → Go to **FLOW B: GENERAL**
-IF `project_type === "agentic"` → Go to **FLOW A: SOFTWARE** (same flow; logbook_software_schema is structurally compatible — objectives carry scope.files pointing to skill/hook/config files and scope.rules referencing agentic rule categories. The orthogonality reviewer and integrity audit subagents work identically. The only semantic difference is that for agentic projects, "code" means skill markdown / hook JSON / prompt files rather than Dart/TS source — but the structural model is the same.)
+Resolve the schema as `logbook_<project_type>_schema.json` in the references dir, then route:
+
+IF `project_type === "software"` → Go to **FLOW A: SOFTWARE** (`logbook_software_schema.json`)
+IF `project_type === "general"` → Go to **FLOW B: GENERAL** (`logbook_general_schema.json`)
+IF `project_type === "agentic"` (or any value with NO dedicated `logbook_<type>_schema.json` in the references) → **emit an EXPLICIT one-line fallback warning, then Go to FLOW A: SOFTWARE.** Never fall back silently:
+```
+ℹ️ project_type 'agentic' has no dedicated logbook schema yet; using logbook_software_schema.json (structurally compatible). The agentic pilot will author logbook_agentic_schema.json when real demand for specific fields emerges (w6 OQ#5 — owner decision: born from the pilot, not speculated).
+```
+FLOW A is structurally compatible for agentic: objectives carry `scope.files` pointing to skill/hook/config files and `scope.rules` referencing agentic rule categories; the orthogonality reviewer and integrity audit subagents work identically. The only semantic difference is that "code" means skill markdown / hook JSON / prompt files rather than Dart/TS source — the structural model is the same.
 
 ---
 

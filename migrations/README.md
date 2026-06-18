@@ -5,6 +5,13 @@ Declarative **artifact** migrations applied by `/waves:upgrade`. The framework i
 updated with `/plugin update`. These files migrate a project's ARTIFACTS (blueprint,
 project_rules, roadmaps, logbooks, CLAUDE.md) from one framework version to the next.
 
+> **The marketplace source does NOT auto-reload (Claude Code behavior).** A directory
+> marketplace (`source: directory`) is cached at install time; editing the source files
+> does not propagate until you run `/plugin update`. A freshly published framework change
+> is invisible to a host project until `/plugin update`, and only THEN does `/waves:upgrade`
+> see the new migration files. Field report 2026-06: a published fix appeared "missing"
+> because the host had not run `/plugin update` first.
+
 ## Idempotent + auto-detected (since 3.0.2)
 
 Since 3.0.2 there is **no `.waves-version` marker file**. The marker was deprecated

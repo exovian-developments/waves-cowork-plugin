@@ -46,8 +46,35 @@ git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
 VALIDATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/waves-artifact-validate"
 
+ALL_STAGED=$(git -C "$REPO" diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
+
+# --- Manifest staleness anchor (w6 Phase 14, sec 6 — root cause d) ---
+# The freshness hook depends on the Claude Code runtime; THIS runs on every
+# commit from ANY surface. Deterministic nudge, never a block: if the commit
+# stages CODE and the repo's manifest exists but is NOT part of the diff, warn.
+CODE_STAGED=""
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    waves_files/*|*/waves_files/*|ai_files/*|*/ai_files/*) continue ;;
+    *.md|*.markdown|*.txt|*.rst) continue ;;
+    *.lock|*-lock.json|*.lock.json|go.sum|*.sum) continue ;;
+    .gitignore|.gitattributes|LICENSE|LICENSE.*|*/LICENSE) continue ;;
+    .claude/*|*/.claude/*) continue ;;
+    *) CODE_STAGED="$f"; break ;;
+  esac
+done <<< "$ALL_STAGED"
+if [ -n "$CODE_STAGED" ]; then
+  for mf in "waves_files/project_manifest.json" "ai_files/project_manifest.json"; do
+    if [ -f "$REPO/$mf" ] && ! printf '%s\n' "$ALL_STAGED" | grep -qxF "$mf"; then
+      echo "waves-pre-commit notice: this commit stages CODE but $mf is not in the diff — if the change is structural or adds a capability, refresh it (/waves:manifest-update). Field lesson: shell manifests rot silently." >&2
+      break
+    fi
+  done
+fi
+
 # --- Staged Waves artifacts only ---
-STAGED=$(git -C "$REPO" diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+STAGED=$(printf '%s\n' "$ALL_STAGED" | \
          grep -E '(^|/)(waves_files|ai_files)/.*\.json$' || true)
 [ -z "$STAGED" ] && exit 0
 

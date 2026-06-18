@@ -1,6 +1,6 @@
 {
   "name": "waves",
-  "version": "3.1.8",
+  "version": "3.1.9",
   "description": "Product development framework for the AI agent era. Complete lifecycle: feasibility analysis with Monte Carlo/Bayesian projections, product foundation, blueprint creation, roadmaps, logbooks, and multi-session continuity. Replaces Scrum/Kanban with organic delivery cycles called waves.",
   "author": {
     "name": "Exovian Developments",

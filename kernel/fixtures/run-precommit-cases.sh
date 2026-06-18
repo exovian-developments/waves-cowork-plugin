@@ -179,8 +179,36 @@ else
   ok worktree-install
 fi
 
+# ============ Case 8: staleness notice — code staged, manifest not in diff ============
+R="$SANDBOX/c8"; new_repo "$R"
+mkdir -p "$R/waves_files"
+echo '{"project":{"name":"t"}}' > "$R/waves_files/project_manifest.json"
+git -C "$R" add -A && git -C "$R" commit -q --no-verify -m manifest-base
+echo "code" > "$R/main.dart"
+git -C "$R" add main.dart
+OUT=$(git -C "$R" commit -m code-only 2>&1); RC=$?
+if [ $RC -eq 0 ] && printf '%s' "$OUT" | grep -q 'manifest_manifest_NOPE'; then :; fi
+if [ $RC -eq 0 ] && printf '%s' "$OUT" | grep -q 'not in the diff'; then
+  ok staleness-notice
+else
+  fail staleness-notice "rc=$RC (sin notice o bloqueado)"
+fi
+
+# ============ Case 9: silence when the manifest IS in the diff ============
+R="$SANDBOX/c9"; new_repo "$R"
+mkdir -p "$R/waves_files"
+echo '{"project":{"name":"t"}}' > "$R/waves_files/project_manifest.json"
+echo "code" > "$R/main.dart"
+git -C "$R" add -A
+OUT=$(git -C "$R" commit -m code-plus-manifest 2>&1); RC=$?
+if [ $RC -eq 0 ] && ! printf '%s' "$OUT" | grep -q 'not in the diff'; then
+  ok staleness-silent-when-fresh
+else
+  fail staleness-silent-when-fresh "rc=$RC"
+fi
+
 if [ "$FAILURES" -gt 0 ]; then
   echo "run-precommit-cases: $FAILURES case(s) failed" >&2
   exit 1
 fi
-echo "run-precommit-cases: all 7 cases passed"
+echo "run-precommit-cases: all 9 cases passed"
